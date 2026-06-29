@@ -137,7 +137,7 @@
   .happy-bar{height:18px;background:#eee;border-radius:10px;overflow:hidden;}
   .happy-fill{height:100%;background:linear-gradient(90deg,#ffb347,#ff7a18);width:0%;transition:width .4s;}
   .care-tabs{display:flex;gap:10px;margin-bottom:10px;}
-  .care-tab{flex:1;padding:12px;border-radius:14px;background:#f0f0f0;font-weight:800;text-align:center;cursor:pointer;border:2px solid transparent;}
+  .care-tab{flex:1;padding:10px 4px;border-radius:14px;background:#f0f0f0;font-weight:800;font-size:13px;text-align:center;cursor:pointer;border:2px solid transparent;}
   .care-tab.sel{background:linear-gradient(180deg,#ff9a3c,#ff7a18);color:#fff;}
   .care-msg{background:#fff6ec;border:2px solid #ffd9b0;border-radius:14px;padding:12px 14px;
     font-weight:700;color:var(--orange-d);min-height:54px;margin-bottom:10px;line-height:1.5;font-size:15px;display:flex;align-items:center;}
@@ -237,8 +237,8 @@
         <div class="tool active" data-mode="move"><span class="emo">👆</span>住人<br>移動</div>
         <div class="tool" data-mode="tree"><span class="emo">🌲</span>木を<br>置く</div>
         <div class="tool" data-mode="house"><span class="emo">🏠</span>家を<br>置く</div>
-        <div class="tool" data-mode="shopFood"><span class="emo">🏪</span>食べ物屋<br>を置く</div>
-        <div class="tool locked" data-mode="shopCloth" id="toolCloth"><span class="emo">👕</span>服屋<br>を置く<span class="new" style="display:none">NEW</span></div>
+        <div class="tool" data-mode="shop"><span class="emo">🏪</span>店を<br>置く</div>
+        <div class="tool locked" data-mode="present" id="toolPresent"><span class="emo">🎁</span>プレゼント屋<br>を置く<span class="new" style="display:none">NEW</span></div>
         <div class="tool" data-mode="addResident"><span class="emo">➕</span>住人<br>追加</div>
       </div>
       <div id="hint"></div>
@@ -297,6 +297,7 @@
       <div class="care-tabs">
         <div class="care-tab sel" data-tab="food">🍔 食べ物</div>
         <div class="care-tab" data-tab="cloth">👕 服</div>
+        <div class="care-tab" data-tab="present">🎁 プレゼント</div>
       </div>
       <div class="care-msg" id="careMsg">何をあげる？</div>
       <div class="shop-grid" id="careGrid"></div>
@@ -377,6 +378,17 @@ const CLOTHES = [
   {id:"c5", name:"むらさき服",price:180, color:0x9b59f5},
   {id:"c6", name:"しろ服",  price:200, color:0xffffff},
   {id:"c7", name:"くろ服",  price:220, color:0x222222},
+];
+// プレゼント8種（性格＝MBTIの文字に合うと幸福度＆お金UP）
+const PRESENTS = [
+  {id:"book",   name:"本",      price:120, emo:"📚", trait:"I"},
+  {id:"mic",    name:"マイク",  price:150, emo:"🎤", trait:"E"},
+  {id:"scope",  name:"望遠鏡",  price:200, emo:"🔭", trait:"N"},
+  {id:"tools",  name:"道具箱",  price:180, emo:"🧰", trait:"S"},
+  {id:"flower", name:"花たば",  price:160, emo:"💐", trait:"F"},
+  {id:"graph",  name:"グラフ帳",price:170, emo:"📊", trait:"T"},
+  {id:"dice",   name:"サイコロ",price:140, emo:"🎲", trait:"P"},
+  {id:"planner",name:"手帳",    price:150, emo:"📒", trait:"J"},
 ];
 
 const SKIN_COLORS   = [0xffe0bd,0xf6c89a,0xe0ac80,0xf2a972,0x8d5524,0xc68642];
@@ -499,24 +511,28 @@ function buildCharacter(THREE, spec){
   const body=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.9,0.3), bodyMats);
   body.position.y=1.35; body.castShadow=true; g.add(body);
 
-  /* ===== 腕（袖＋袖口＋手） ===== */
+  /* ===== 腕（肩を支点に振れるよう pivot 化） ===== */
   const armFace=()=>mk((x,w,h)=>{ F(x,CLO,0,0,w,h); F(x,adj(CLO,-25),0,Math.floor(h*0.60),w,2);
     F(x,SKIN,0,Math.floor(h*0.66),w,Math.ceil(h*0.34)); F(x,adj(SKIN,-16),0,h-2,w,2); },8,24);
+  const armPivots=[];
   function arm(sx){
+    const piv=new THREE.Group(); piv.position.set(sx,1.8,0);            // 肩
     const m=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.9,0.3),
       [armFace(),armFace(),solid(CLO),solid(SKIN),armFace(),armFace()]);
-    m.position.set(sx,1.35,0); m.castShadow=true; g.add(m);
+    m.position.y=-0.45; m.castShadow=true; piv.add(m); g.add(piv); armPivots.push(piv);
   }
   arm(-0.45); arm(0.45);
 
-  /* ===== 脚（ズボン/スカートで素肌切替＋靴） ===== */
+  /* ===== 脚（股関節を支点に振れるよう pivot 化／ズボン・スカート＋靴） ===== */
   const legTop = isSkirt? SKIN : BOT;
   const legFace=()=>mk((x,w,h)=>{ F(x,legTop,0,0,w,h); F(x,adj(legTop,-22),0,0,1,Math.floor(h*0.82));
     F(x,SHOE,0,Math.floor(h*0.82),w,Math.ceil(h*0.18)); F(x,adj(SHOE,-28),0,Math.floor(h*0.82),w,1); },8,24);
+  const legPivots=[];
   function leg(sx){
+    const piv=new THREE.Group(); piv.position.set(sx,0.9,0);            // 股関節
     const m=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.9,0.3),
       [legFace(),legFace(),solid(legTop),solid(SHOE),legFace(),legFace()]);
-    m.position.set(sx,0.45,0); m.castShadow=true; g.add(m);
+    m.position.y=-0.45; m.castShadow=true; piv.add(m); g.add(piv); legPivots.push(piv);
   }
   leg(-0.15); leg(0.15);
 
@@ -526,7 +542,7 @@ function buildCharacter(THREE, spec){
     skirt.position.y=0.85; skirt.castShadow=true; g.add(skirt);
   }
 
-  g.userData.spec = spec;
+  g.userData.spec = spec; g.userData.armPivots=armPivots; g.userData.legPivots=legPivots;
   return g;
 }
 
@@ -543,7 +559,7 @@ function defaultSpec(){
 /* 外部に公開 */
 window.DOPA = window.DOPA || {};
 Object.assign(window.DOPA, {
-  MBTI,MBTI_CATCH,FOODS,CLOTHES,SKIN_COLORS,HAIR_COLORS,CLOTHES_COLORS,EYE_COLORS,CHEEK_COLORS,
+  MBTI,MBTI_CATCH,FOODS,CLOTHES,PRESENTS,SKIN_COLORS,HAIR_COLORS,CLOTHES_COLORS,EYE_COLORS,CHEEK_COLORS,
   HAIR_STYLES,EYE_SHAPES,NOSE_SHAPES,MOUTH_SHAPES,
   buildCharacter,defaultSpec,$,$$,showScreen,toast
 });
@@ -558,7 +574,7 @@ Object.assign(window.DOPA, {
 (function(){
 'use strict';
 const D = window.DOPA;
-const {MBTI,MBTI_CATCH,FOODS,CLOTHES,SKIN_COLORS,HAIR_COLORS,CLOTHES_COLORS,EYE_COLORS,CHEEK_COLORS,
+const {MBTI,MBTI_CATCH,FOODS,CLOTHES,PRESENTS,SKIN_COLORS,HAIR_COLORS,CLOTHES_COLORS,EYE_COLORS,CHEEK_COLORS,
        HAIR_STYLES,EYE_SHAPES,NOSE_SHAPES,MOUTH_SHAPES,buildCharacter,defaultSpec,
        $,$$,showScreen,toast} = D;
 
@@ -567,7 +583,7 @@ let state = {
   islandName:"", islandYomi:"しま", gold:1000,
   residents:[],   // {spec, happy, pos:{x,z}, favFood, clothId}
   buildings:[],   // {type:'tree'|'house', pos:{x,z}}
-  clothUnlocked:false
+  clothUnlocked:false, presentUnlocked:false
 };
 const SAVE_KEY = "dopagaki_save_v1";
 
@@ -575,8 +591,8 @@ const SAVE_KEY = "dopagaki_save_v1";
 let THREE = window.THREE;
 let scene,camera,renderer,clock;
 let islandGroup, residentMeshes=[], buildingMeshes=[];
-let camAngle = 0.0, camTargetAngle=0.0, camDist=18, camTargetDist=18, camHeight=13;
-const ISLAND_R = 8;
+let camAngle = 0.0, camTargetAngle=0.0, camDist=23, camTargetDist=23, camHeight=16;
+const ISLAND_R = 11;
 let raycaster, pointer;
 let curMode = "move";
 let dragging=null, dragOffset=new THREE.Vector3();
@@ -661,6 +677,11 @@ function pickWanderTarget(cur){
   }
   return {x:cur.x*0.6, z:cur.z*0.6};   // だめなら中心寄りへ
 }
+function setLimbSwing(m,a){
+  const u=m.userData;
+  if(u.legPivots){ u.legPivots[0].rotation.x=a; u.legPivots[1].rotation.x=-a; }
+  if(u.armPivots){ u.armPivots[0].rotation.x=-a*0.8; u.armPivots[1].rotation.x=a*0.8; }
+}
 function updateWander(dt){
   dt=Math.min(dt,0.05);                // タブ復帰時などの大ジャンプ防止
   const now=performance.now();
@@ -669,19 +690,26 @@ function updateWander(dt){
     const r=m.userData.resident;
     let w=m.userData.wander;
     if(!w){ w=m.userData.wander={target:{x:r.pos.x,z:r.pos.z}, pause:Math.random()*2.5}; }
-    if(m.userData.busyUntil && now<m.userData.busyUntil){ m.position.y=0.5; continue; } // 会話中は静止
-    if(w.pause>0){ w.pause-=dt; m.position.y=0.5; continue; }                            // 休憩中
-    const dx=w.target.x-m.position.x, dz=w.target.z-m.position.z;
-    const d=Math.hypot(dx,dz);
-    if(d<0.15){                        // 到着→少し休んで次の目的地へ
-      w.pause=1.0+Math.random()*3.0; w.target=pickWanderTarget(m.position);
-      m.position.y=0.5; continue;
+    let moving=false;
+    const busy = m.userData.busyUntil && now<m.userData.busyUntil;
+    if(busy){ /* 会話中は静止 */ }
+    else if(w.pause>0){ w.pause-=dt; }                                  // 休憩中
+    else {
+      const dx=w.target.x-m.position.x, dz=w.target.z-m.position.z, d=Math.hypot(dx,dz);
+      if(d<0.15){ w.pause=1.0+Math.random()*3.0; w.target=pickWanderTarget(m.position); } // 到着
+      else {
+        const step=Math.min(d, WANDER_SPEED*dt);
+        m.position.x+=dx/d*step; m.position.z+=dz/d*step;
+        r.pos.x=m.position.x; r.pos.z=m.position.z;                     // 保存用に同期
+        m.rotation.y = lerpAngle(m.rotation.y, Math.atan2(dx,dz), Math.min(1,dt*8)); // 進行方向
+        m.userData.walk=(m.userData.walk||0)+step*6.5;                 // 歩行位相
+        moving=true;
+      }
     }
-    const step=Math.min(d, WANDER_SPEED*dt);
-    m.position.x+=dx/d*step; m.position.z+=dz/d*step;
-    r.pos.x=m.position.x; r.pos.z=m.position.z;                                  // 保存用に同期
-    m.rotation.y = lerpAngle(m.rotation.y, Math.atan2(dx,dz), Math.min(1,dt*8)); // 進行方向を向く
-    m.position.y = 0.5 + Math.abs(Math.sin(now*0.012))*0.06;                     // てくてく上下
+    m.position.y=0.5;
+    const tgt = moving ? Math.sin(m.userData.walk||0)*0.55 : 0;        // 脚・腕の振り
+    m.userData.swing = (m.userData.swing||0) + (tgt-(m.userData.swing||0))*Math.min(1,dt*12);
+    setLimbSwing(m, m.userData.swing);
   }
 }
 
@@ -692,7 +720,7 @@ function rebuildIsland(){
   state.buildings.forEach(b=>{
     let m;
     if(b.type==='tree') m=makeTree();
-    else if(b.type==='shopFood'||b.type==='shopCloth') m=makeShop(b.type);
+    else if(b.type==='shop'||b.type==='present'||b.type==='shopFood'||b.type==='shopCloth') m=makeShop(b.type==='present'?'present':'shop');
     else m=makeHouse();
     m.position.set(b.pos.x,0.5,b.pos.z); m.userData.building=b;
     islandGroup.add(m); buildingMeshes.push(m);
@@ -755,9 +783,9 @@ function signTexture(emo){
    原点(y=0)が接地面。rebuildIsland で group.y=0.5 に置かれて島に乗る。 */
 function makeShop(kind){
   const g=new THREE.Group();
-  const food = kind==='shopFood';
-  const accent  = food?0xff7a18:0xff5ea8;          // 屋根色（食=オレンジ/服=ピンク）
-  const stripe  = food?'#e8412f':'#9b59f5';        // テントの縞色
+  const present = kind==='present';
+  const accent  = present?0xff5ea8:0xff7a18;        // 屋根色（店=オレンジ/プレゼント屋=ピンク）
+  const stripe  = present?'#ff5ea8':'#e8412f';      // テントの縞色
   // 本体（家より低く横長＝お店らしいシルエット）
   const body=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.9,1.2),
     new THREE.MeshStandardMaterial({color:0xfdf3e7}));
@@ -782,7 +810,7 @@ function makeShop(kind){
     new THREE.MeshStandardMaterial({color:0x7a5a3a}));
   post.position.set(0.55,1.25,0); g.add(post);
   const board=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.6,0.07),
-    new THREE.MeshStandardMaterial({map:signTexture(food?'🍔':'👕')}));
+    new THREE.MeshStandardMaterial({map:signTexture(present?'🎁':'🏪')}));
   board.position.set(0.55,1.62,0); board.castShadow=true; g.add(board);
   g.userData.kind=kind; return g;
 }
@@ -868,19 +896,19 @@ function handleTap(e){
     if(b){
       const t=b.userData.building.type;
       if(t==='house'){ window.DOPA.core.openHouse(); return; }
-      if(t==='shopFood'){ toast("🍔 おいしそうな匂いがする…"); return; }
-      if(t==='shopCloth'){ toast("👕 すてきな服が並んでいる！"); return; }
+      if(t==='shop'||t==='shopFood'||t==='shopCloth'){ toast("🏪 なんでも売ってるお店だ！"); return; }
+      if(t==='present'){ toast("🎁 すてきなプレゼントが並んでいる！"); return; }
     }
     return;
   }
-  if(curMode==='tree'||curMode==='house'||curMode==='shopFood'||curMode==='shopCloth'){
+  if(curMode==='tree'||curMode==='house'||curMode==='shop'||curMode==='present'){
     const p=pickGround(e); if(!p) return;
     const r=Math.hypot(p.x,p.z); if(r>ISLAND_R-0.8){ toast("島の上に置いてね"); return; }
     if(tooClose(p.x,p.z)){ toast("近すぎるよ。別の場所に！"); return; }
     if(curMode==='tree'){ state.buildings.push({type:'tree',pos:{x:p.x,z:p.z}}); }
     else if(curMode==='house'){ state.buildings.push({type:'house',pos:{x:p.x,z:p.z}}); }
-    else if(curMode==='shopFood'){ state.buildings.push({type:'shopFood',pos:{x:p.x,z:p.z}}); toast("食べ物屋を置いた！"); }
-    else if(curMode==='shopCloth'){ state.buildings.push({type:'shopCloth',pos:{x:p.x,z:p.z}}); toast("服屋を置いた！"); }
+    else if(curMode==='shop'){ state.buildings.push({type:'shop',pos:{x:p.x,z:p.z}}); toast("店を置いた！"); }
+    else if(curMode==='present'){ state.buildings.push({type:'present',pos:{x:p.x,z:p.z}}); toast("プレゼント屋を置いた！"); }
     hideHint(); setMode('move');
     rebuildIsland();
   }
@@ -892,8 +920,8 @@ function setMode(mode){
   $$('#toolbar .tool').forEach(t=>t.classList.toggle('active', t.dataset.mode===mode));
   if(mode==='tree') showHint("木を置く場所を地面でタップ");
   else if(mode==='house') showHint("家を置く場所を地面でタップ");
-  else if(mode==='shopFood') showHint("食べ物屋を置く場所をタップ");
-  else if(mode==='shopCloth') showHint("服屋を置く場所をタップ");
+  else if(mode==='shop') showHint("店を置く場所をタップ");
+  else if(mode==='present') showHint("プレゼント屋を置く場所をタップ");
   else hideHint();
 }
 function showHint(t){ const h=$('#hint'); h.innerHTML=t+'<br><button class="btn btn-gray btn-sm" id="hintCancel">キャンセル</button>';
@@ -912,7 +940,7 @@ function setupCamStick(){
     const max=44, d=Math.hypot(dx,dy); if(d>max){ dx=dx/d*max; dy=dy/d*max; }
     knob.style.transform=`translate(${dx}px,${dy}px)`;
     camTargetAngle += dx*0.0009;     // 左右で回転
-    camTargetDist = Math.max(7,Math.min(20, camTargetDist + dy*0.02)); // 上下で寄り引き
+    camTargetDist = Math.max(9,Math.min(32, camTargetDist + dy*0.02)); // 上下で寄り引き
   }
   function end(){ active=false; knob.style.transform='translate(0,0)'; }
   stick.addEventListener('touchstart',start,{passive:true});
@@ -921,8 +949,8 @@ function setupCamStick(){
   stick.addEventListener('mousedown',start);
   window.addEventListener('mousemove',move);
   window.addEventListener('mouseup',end);
-  $('#zoomIn').onclick=()=>{ camTargetDist=Math.max(7,camTargetDist-2); };
-  $('#zoomOut').onclick=()=>{ camTargetDist=Math.min(20,camTargetDist+2); };
+  $('#zoomIn').onclick=()=>{ camTargetDist=Math.max(9,camTargetDist-2); };
+  $('#zoomOut').onclick=()=>{ camTargetDist=Math.min(32,camTargetDist+2); };
 }
 
 /* ---------- 会話システム ---------- */
@@ -1000,8 +1028,8 @@ function updateBadges(){
 function refreshHUD(){
   $('#hudIslandName').textContent = state.islandName+'島';
   $('#hudGold').textContent = state.gold;
-  const tool=$('#toolCloth');
-  if(state.clothUnlocked){ tool.classList.remove('locked'); }
+  const tp=$('#toolPresent');
+  if(tp && state.presentUnlocked){ tp.classList.remove('locked'); const nb=tp.querySelector('.new'); if(nb) nb.style.display='block'; }
 }
 
 /* ====== 公開（その3で使う） ====== */
@@ -1025,7 +1053,7 @@ window.DOPA.core = {
 const D = window.DOPA;
 const core = D.core;
 const THREE = window.THREE;
-const {MBTI,MBTI_CATCH,FOODS,CLOTHES,SKIN_COLORS,HAIR_COLORS,CLOTHES_COLORS,EYE_COLORS,CHEEK_COLORS,
+const {MBTI,MBTI_CATCH,FOODS,CLOTHES,PRESENTS,SKIN_COLORS,HAIR_COLORS,CLOTHES_COLORS,EYE_COLORS,CHEEK_COLORS,
        HAIR_STYLES,EYE_SHAPES,NOSE_SHAPES,MOUTH_SHAPES,buildCharacter,defaultSpec,
        $,$$,showScreen,toast} = D;
 const S = core.state;           // 同一参照を直接ミューテートする
@@ -1167,7 +1195,7 @@ function openMaker(forced){
 }
 function findFreeSpot(){
   for(let i=0;i<40;i++){
-    const a=Math.random()*Math.PI*2, r=Math.random()*5.5;
+    const a=Math.random()*Math.PI*2, r=Math.random()*9;
     const x=Math.cos(a)*r, z=Math.sin(a)*r;
     const occ=[...S.residents.map(rr=>rr.pos),...S.buildings.map(b=>b.pos)];
     if(!occ.some(p=>Math.hypot(p.x-x,p.z-z)<1.4)) return {x,z};
@@ -1185,15 +1213,16 @@ function confirmMaker(){
   };
   S.residents.push(res);
   if(makerStage) makerStage.show(false);
-  if(S.residents.length>=2 && !S.clothUnlocked){
-    S.clothUnlocked=true;
-    const tool=$('#toolCloth'); tool.classList.remove('locked');
-    const nb=tool.querySelector('.new'); if(nb) nb.style.display='block';
+  if(S.residents.length>=2) S.clothUnlocked=true;
+  let unlockedPresent=false;
+  if(S.residents.length>=3 && !S.presentUnlocked){
+    S.presentUnlocked=true; unlockedPresent=true;
+    const tp=$('#toolPresent'); if(tp){ tp.classList.remove('locked'); const nb=tp.querySelector('.new'); if(nb) nb.style.display='block'; }
   }
   ensureIsland();
   core.rebuildIsland();
   showScreen('islandScreen');
-  toast(res.spec.name+" が島にやってきた！");
+  toast(unlockedPresent ? "🎁 プレゼント屋が解禁！" : (res.spec.name+" が島にやってきた！"));
   autosave();
 }
 
@@ -1303,7 +1332,7 @@ function buildCareGrid(){
         <div class="pr"><span class="mini-coin"></span>${f.price}</div>`;
       it.onclick=()=>giveFood(f); grid.appendChild(it);
     });
-  } else {
+  } else if(careTab==='cloth'){
     if(!S.clothUnlocked){
       grid.innerHTML='<div style="grid-column:1/5;text-align:center;font-weight:800;color:#888;padding:20px;">2人目を島に呼ぶと<br>服が開放されるよ！</div>';
       return;
@@ -1315,6 +1344,18 @@ function buildCareGrid(){
         <div class="nm">${c.name}${owned?' ✓':''}</div>
         <div class="pr"><span class="mini-coin"></span>${c.price}</div>`;
       it.onclick=()=>giveCloth(c); grid.appendChild(it);
+    });
+  }
+  else { // プレゼント
+    if(!S.presentUnlocked){
+      grid.innerHTML='<div style="grid-column:1/5;text-align:center;font-weight:800;color:#888;padding:20px;">3人目を島に呼ぶと<br>プレゼントが解禁されるよ！</div>';
+      return;
+    }
+    PRESENTS.forEach(pp=>{
+      const it=el('div','shop-item');
+      it.innerHTML=`<div class="img">${pp.emo}</div><div class="nm">${pp.name}</div>
+        <div class="pr"><span class="mini-coin"></span>${pp.price}</div>`;
+      it.onclick=()=>givePresent(pp); grid.appendChild(it);
     });
   }
 }
@@ -1345,6 +1386,19 @@ function giveCloth(c){
   const up=addHappy(careRes, 10);
   if(up.leveled) onLevelUp(careRes, up);
   updateHappy(); core.refreshHUD(); buildCareGrid(); autosave();
+}
+function givePresent(p){
+  if(S.gold<p.price){ toast("Gが足りないよ！"); return; }
+  S.gold-=p.price;
+  const mbti=careRes.spec.mbti||'';
+  const match = mbti.indexOf(p.trait)>=0;
+  let gain;
+  if(match){ gain=25; const reward=p.price*2; S.gold+=reward;
+    $('#careMsg').textContent=`🎁 ${reaction(careRes,'love')}（好みドンピシャ！ ＋${reward}G）`; }
+  else { gain=6; $('#careMsg').textContent=`🎁 ${reaction(careRes,'ok')}（好みではなかったみたい…）`; }
+  const up=addHappy(careRes, gain);
+  if(up.leveled) onLevelUp(careRes, up);
+  updateHappy(); core.refreshHUD(); autosave();
 }
 function closeCare(){
   if(careStage) careStage.show(false);
@@ -1428,7 +1482,7 @@ async function loadGame(){
   try{
     const obj=JSON.parse(raw);
     S.islandName=obj.islandName||""; S.islandYomi=obj.islandYomi||"しま";
-    S.gold=obj.gold??1000; S.clothUnlocked=!!obj.clothUnlocked;
+    S.gold=obj.gold??1000; S.clothUnlocked=!!obj.clothUnlocked; S.presentUnlocked=!!obj.presentUnlocked;
     S.residents.length=0; (obj.residents||[]).forEach(r=>{ if(r.level==null) r.level=1; S.residents.push(r); });
     S.buildings.length=0; (obj.buildings||[]).forEach(b=>S.buildings.push(b));
     return true;
@@ -1449,14 +1503,14 @@ function wire(){
   $('#continueBtn').onclick=async ()=>{
     if(!await loadGame()){ toast("セーブデータが無いよ"); return; }
     ensureIsland(); core.rebuildIsland(); core.refreshHUD();
-    if(S.clothUnlocked){ const t=$('#toolCloth'); t.classList.remove('locked'); const nb=t.querySelector('.new'); if(nb) nb.style.display='block'; }
+    if(S.presentUnlocked){ const t=$('#toolPresent'); if(t){ t.classList.remove('locked'); const nb=t.querySelector('.new'); if(nb) nb.style.display='block'; } }
     showScreen('islandScreen');
   };
   $$('#toolbar .tool').forEach(t=>{
     t.onclick=()=>{
       const mode=t.dataset.mode;
       if(mode==='addResident'){ openMaker(false); return; }
-      if(mode==='shopCloth' && !S.clothUnlocked){ toast("2人目を島に呼ぶと開放！"); return; }
+      if(mode==='present' && !S.presentUnlocked){ toast("3人目を島に呼ぶと開放！"); return; }
       core.setMode(mode);
     };
   });
