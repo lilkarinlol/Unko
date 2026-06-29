@@ -165,6 +165,8 @@
   .modal-card p{font-weight:800;font-size:17px;line-height:1.6;margin:0 0 18px;}
   .modal-card .row{display:flex;gap:12px;}
   .modal-card .row .btn{flex:1;}
+  .shop-opts{display:flex;flex-direction:column;gap:10px;}
+  .shop-opt.locked{opacity:.5;filter:grayscale(.45);}
   #hint{position:absolute;left:50%;top:14%;transform:translateX(-50%);background:rgba(40,44,52,.92);
     color:#fff;font-weight:800;padding:12px 18px;border-radius:16px;z-index:40;display:none;text-align:center;}
   #hint .btn{margin-top:10px;}
@@ -237,8 +239,7 @@
         <div class="tool active" data-mode="move"><span class="emo">👆</span>住人<br>移動</div>
         <div class="tool" data-mode="tree"><span class="emo">🌲</span>木を<br>置く</div>
         <div class="tool" data-mode="house"><span class="emo">🏠</span>家を<br>置く</div>
-        <div class="tool" data-mode="shop"><span class="emo">🏪</span>店を<br>置く</div>
-        <div class="tool locked" data-mode="present" id="toolPresent"><span class="emo">🎁</span>プレゼント屋<br>を置く<span class="new" style="display:none">NEW</span></div>
+        <div class="tool" data-mode="shop"><span class="emo">🏪</span>店を<br>置く<span class="new" id="shopNew" style="display:none">NEW</span></div>
         <div class="tool" data-mode="addResident"><span class="emo">➕</span>住人<br>追加</div>
       </div>
       <div id="hint"></div>
@@ -314,6 +315,15 @@
   <div id="toast"></div>
   <div id="saveBurst"><div class="b">💾 保存しました！</div></div>
   <div id="lvBurst"><div class="b">🎉 レベルアップ！</div></div>
+  <div class="modal" id="shopMenu"><div class="modal-card">
+    <p>どのお店を置く？</p>
+    <div class="shop-opts">
+      <button class="btn btn-org btn-lg shop-opt" data-mode="shopFood">🍔 食べ物屋</button>
+      <button class="btn btn-org btn-lg shop-opt locked" data-mode="shopCloth" id="optCloth">👕 服屋</button>
+      <button class="btn btn-org btn-lg shop-opt locked" data-mode="present" id="optPresent">🎁 プレゼント屋</button>
+    </div>
+    <button class="btn btn-gray btn-sm" id="shopCancel" style="margin-top:14px;">やめる</button>
+  </div></div>
   <div class="modal" id="quitModal"><div class="modal-card">
     <p>ゲームを終了しますか？<br>（セーブ済みの内容は残ります）</p>
     <div class="row"><button class="btn btn-gray" id="quitNo">いいえ</button>
@@ -720,7 +730,7 @@ function rebuildIsland(){
   state.buildings.forEach(b=>{
     let m;
     if(b.type==='tree') m=makeTree();
-    else if(b.type==='shop'||b.type==='present'||b.type==='shopFood'||b.type==='shopCloth') m=makeShop(b.type==='present'?'present':'shop');
+    else if(b.type==='shopFood'||b.type==='shopCloth'||b.type==='present'||b.type==='shop') m=makeShop(b.type==='shop'?'shopFood':b.type);
     else m=makeHouse();
     m.position.set(b.pos.x,0.5,b.pos.z); m.userData.building=b;
     islandGroup.add(m); buildingMeshes.push(m);
@@ -783,9 +793,10 @@ function signTexture(emo){
    原点(y=0)が接地面。rebuildIsland で group.y=0.5 に置かれて島に乗る。 */
 function makeShop(kind){
   const g=new THREE.Group();
-  const present = kind==='present';
-  const accent  = present?0xff5ea8:0xff7a18;        // 屋根色（店=オレンジ/プレゼント屋=ピンク）
-  const stripe  = present?'#ff5ea8':'#e8412f';      // テントの縞色
+  const C = (kind==='present')   ? {accent:0xff5ea8, stripe:'#ff5ea8', sign:'🎁'}  // プレゼント屋
+          : (kind==='shopCloth') ? {accent:0x2d8cff, stripe:'#2d8cff', sign:'👕'}  // 服屋
+          :                        {accent:0xff7a18, stripe:'#e8412f', sign:'🍔'}; // 食べ物屋
+  const accent=C.accent, stripe=C.stripe;
   // 本体（家より低く横長＝お店らしいシルエット）
   const body=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.9,1.2),
     new THREE.MeshStandardMaterial({color:0xfdf3e7}));
@@ -810,7 +821,7 @@ function makeShop(kind){
     new THREE.MeshStandardMaterial({color:0x7a5a3a}));
   post.position.set(0.55,1.25,0); g.add(post);
   const board=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.6,0.07),
-    new THREE.MeshStandardMaterial({map:signTexture(present?'🎁':'🏪')}));
+    new THREE.MeshStandardMaterial({map:signTexture(C.sign)}));
   board.position.set(0.55,1.62,0); board.castShadow=true; g.add(board);
   g.userData.kind=kind; return g;
 }
@@ -896,18 +907,20 @@ function handleTap(e){
     if(b){
       const t=b.userData.building.type;
       if(t==='house'){ window.DOPA.core.openHouse(); return; }
-      if(t==='shop'||t==='shopFood'||t==='shopCloth'){ toast("🏪 なんでも売ってるお店だ！"); return; }
+      if(t==='shopFood'||t==='shop'){ toast("🍔 おいしそうな匂いがする…"); return; }
+      if(t==='shopCloth'){ toast("👕 すてきな服が並んでいる！"); return; }
       if(t==='present'){ toast("🎁 すてきなプレゼントが並んでいる！"); return; }
     }
     return;
   }
-  if(curMode==='tree'||curMode==='house'||curMode==='shop'||curMode==='present'){
+  if(curMode==='tree'||curMode==='house'||curMode==='shopFood'||curMode==='shopCloth'||curMode==='present'){
     const p=pickGround(e); if(!p) return;
     const r=Math.hypot(p.x,p.z); if(r>ISLAND_R-0.8){ toast("島の上に置いてね"); return; }
     if(tooClose(p.x,p.z)){ toast("近すぎるよ。別の場所に！"); return; }
     if(curMode==='tree'){ state.buildings.push({type:'tree',pos:{x:p.x,z:p.z}}); }
     else if(curMode==='house'){ state.buildings.push({type:'house',pos:{x:p.x,z:p.z}}); }
-    else if(curMode==='shop'){ state.buildings.push({type:'shop',pos:{x:p.x,z:p.z}}); toast("店を置いた！"); }
+    else if(curMode==='shopFood'){ state.buildings.push({type:'shopFood',pos:{x:p.x,z:p.z}}); toast("食べ物屋を置いた！"); }
+    else if(curMode==='shopCloth'){ state.buildings.push({type:'shopCloth',pos:{x:p.x,z:p.z}}); toast("服屋を置いた！"); }
     else if(curMode==='present'){ state.buildings.push({type:'present',pos:{x:p.x,z:p.z}}); toast("プレゼント屋を置いた！"); }
     hideHint(); setMode('move');
     rebuildIsland();
@@ -917,10 +930,13 @@ function handleTap(e){
 /* ---------- モード切替・ヒント ---------- */
 function setMode(mode){
   curMode=mode;
-  $$('#toolbar .tool').forEach(t=>t.classList.toggle('active', t.dataset.mode===mode));
+  $$('#toolbar .tool').forEach(t=>{ const dm=t.dataset.mode;
+    t.classList.toggle('active', dm===mode || (dm==='shop' && (mode==='shopFood'||mode==='shopCloth'||mode==='present'))); });
   if(mode==='tree') showHint("木を置く場所を地面でタップ");
   else if(mode==='house') showHint("家を置く場所を地面でタップ");
-  else if(mode==='shop') showHint("店を置く場所をタップ");
+  else if(mode==='shopFood') showHint("食べ物屋を置く場所をタップ");
+  else if(mode==='shopCloth') showHint("服屋を置く場所をタップ");
+  else if(mode==='present') showHint("プレゼント屋を置く場所をタップ");
   else if(mode==='present') showHint("プレゼント屋を置く場所をタップ");
   else hideHint();
 }
@@ -1028,8 +1044,9 @@ function updateBadges(){
 function refreshHUD(){
   $('#hudIslandName').textContent = state.islandName+'島';
   $('#hudGold').textContent = state.gold;
-  const tp=$('#toolPresent');
-  if(tp && state.presentUnlocked){ tp.classList.remove('locked'); const nb=tp.querySelector('.new'); if(nb) nb.style.display='block'; }
+  const oc=$('#optCloth'); if(oc && state.clothUnlocked) oc.classList.remove('locked');
+  const op=$('#optPresent'); if(op && state.presentUnlocked) op.classList.remove('locked');
+  const sn=$('#shopNew'); if(sn) sn.style.display=(state.clothUnlocked||state.presentUnlocked)?'block':'none';
 }
 
 /* ====== 公開（その3で使う） ====== */
@@ -1213,16 +1230,16 @@ function confirmMaker(){
   };
   S.residents.push(res);
   if(makerStage) makerStage.show(false);
+  const had2=S.clothUnlocked, had3=S.presentUnlocked;
   if(S.residents.length>=2) S.clothUnlocked=true;
-  let unlockedPresent=false;
-  if(S.residents.length>=3 && !S.presentUnlocked){
-    S.presentUnlocked=true; unlockedPresent=true;
-    const tp=$('#toolPresent'); if(tp){ tp.classList.remove('locked'); const nb=tp.querySelector('.new'); if(nb) nb.style.display='block'; }
-  }
+  if(S.residents.length>=3) S.presentUnlocked=true;
+  let unlockMsg='';
+  if(!had2 && S.clothUnlocked) unlockMsg='👕 服屋が解禁！（店から置けるよ）';
+  if(!had3 && S.presentUnlocked) unlockMsg='🎁 プレゼント屋が解禁！（店から置けるよ）';
   ensureIsland();
   core.rebuildIsland();
   showScreen('islandScreen');
-  toast(unlockedPresent ? "🎁 プレゼント屋が解禁！" : (res.spec.name+" が島にやってきた！"));
+  toast(unlockMsg || (res.spec.name+" が島にやってきた！"));
   autosave();
 }
 
@@ -1492,6 +1509,8 @@ async function loadGame(){
 /* =========================================================
    イベント結線・初期化
    ========================================================= */
+function toggleShopMenu(){ $('#shopMenu').classList.toggle('show'); const sn=$('#shopNew'); if(sn) sn.style.display='none'; }
+function hideShopMenu(){ $('#shopMenu').classList.remove('show'); }
 function wire(){
   $('#decideIslandBtn').onclick=()=>{
     const nm=$('#islandNameInput').value.trim();
@@ -1503,17 +1522,27 @@ function wire(){
   $('#continueBtn').onclick=async ()=>{
     if(!await loadGame()){ toast("セーブデータが無いよ"); return; }
     ensureIsland(); core.rebuildIsland(); core.refreshHUD();
-    if(S.presentUnlocked){ const t=$('#toolPresent'); if(t){ t.classList.remove('locked'); const nb=t.querySelector('.new'); if(nb) nb.style.display='block'; } }
     showScreen('islandScreen');
   };
   $$('#toolbar .tool').forEach(t=>{
     t.onclick=()=>{
       const mode=t.dataset.mode;
+      if(mode==='shop'){ toggleShopMenu(); return; }
+      hideShopMenu();
       if(mode==='addResident'){ openMaker(false); return; }
-      if(mode==='present' && !S.presentUnlocked){ toast("3人目を島に呼ぶと開放！"); return; }
       core.setMode(mode);
     };
   });
+  $$('#shopMenu .shop-opt').forEach(o=>{
+    o.onclick=()=>{
+      const mode=o.dataset.mode;
+      if(mode==='shopCloth' && !S.clothUnlocked){ toast("2人目を島に呼ぶと服屋が解禁！"); return; }
+      if(mode==='present' && !S.presentUnlocked){ toast("3人目を島に呼ぶとプレゼント屋が解禁！"); return; }
+      hideShopMenu(); core.setMode(mode);
+    };
+  });
+  $('#shopCancel').onclick=hideShopMenu;
+  $('#shopMenu').onclick=(e)=>{ if(e.target.id==='shopMenu') hideShopMenu(); };
   $('#saveBtn').onclick=()=>{ saveGame(true); };
   $('#quitBtn').onclick=()=>$('#quitModal').classList.add('show');
   $('#quitNo').onclick=()=>$('#quitModal').classList.remove('show');
