@@ -111,6 +111,11 @@
   .swatches{display:flex;flex-wrap:wrap;gap:10px;}
   .sw{width:42px;height:42px;border-radius:50%;border:3px solid #ddd;cursor:pointer;box-shadow:0 2px 5px rgba(0,0,0,.12);}
   .sw.sel{border-color:var(--orange);transform:scale(1.06);}
+  .swpick{width:42px;height:42px;border-radius:50%;border:3px solid #bbb;padding:0;cursor:pointer;background:#fff;
+    -webkit-appearance:none;appearance:none;}
+  .swpick::-webkit-color-swatch-wrapper{padding:2px;}
+  .swpick::-webkit-color-swatch{border:none;border-radius:50%;}
+  .swpick::-moz-color-swatch{border:none;border-radius:50%;}
   .chips{display:flex;flex-wrap:wrap;gap:10px;}
   .chip{padding:10px 16px;border-radius:14px;border:2px solid #ddd;background:#fff;font-weight:800;cursor:pointer;font-size:15px;}
   .chip.sel{border-color:var(--orange);background:#fff3e8;color:var(--orange-d);}
@@ -262,6 +267,7 @@
           <div class="swatches" id="swBottom" style="margin-top:12px;"></div>
         </div>
         <div class="field"><h3>肌の色</h3><div class="swatches" id="swSkin"></div></div>
+        <div class="field"><h3>ほっぺの色</h3><div class="swatches" id="swCheek"></div></div>
         <div class="field"><h3>髪型</h3><div class="chips" id="hairStyle"></div></div>
         <div class="field"><h3>髪の色</h3><div class="swatches" id="swHair"></div></div>
         <div class="field"><h3>目の形</h3><div class="chips" id="eyeShape"></div></div>
@@ -377,7 +383,8 @@ const SKIN_COLORS   = [0xffe0bd,0xf6c89a,0xe0ac80,0xf2a972,0x8d5524,0xc68642];
 const HAIR_COLORS   = [0x2b2b2b,0x6e4322,0xf2c200,0xe8412f,0x9b59f5,0xff5ea8,0x35c5d8];
 const CLOTHES_COLORS= [0xff5a1f,0x2d8cff,0x34c759,0xffd60a,0xff5ea8,0x9b59f5,0xffffff,0x222222];
 const EYE_COLORS    = [0x2b2b2b,0x5a3a1a,0x2e7d32,0x1565c0,0x6a1b9a,0x424242];
-const HAIR_STYLES   = ["ショート","ロング","ツインテール","ボブ","ポニーテール","アフロ","お団子","坊主"];
+const CHEEK_COLORS  = [0xff9aa6,0xffb3c1,0xff7a8a,0xffa14d,0xd98cff,0xff5e7a];
+const HAIR_STYLES   = ["髪型1","髪型2","髪型3","髪型4","髪型5","髪型6","髪型7"];
 const EYE_SHAPES    = ["丸目","つり目","たれ目","ジト目"];
 const NOSE_SHAPES   = ["丸","小さい","つん"];
 const MOUTH_SHAPES  = ["にっこり","への字","小さい口"];
@@ -397,11 +404,15 @@ function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('sh
 function buildCharacter(THREE, spec){
   const g = new THREE.Group();
   const hexc = c => (typeof c==='string') ? c : '#'+(((c>>>0)&0xffffff).toString(16).padStart(6,'0'));
+  const adj = (hx,d)=>{ const n=parseInt(hx.slice(1),16); let r=(n>>16)&255,gg=(n>>8)&255,b=n&255;
+    r=Math.max(0,Math.min(255,r+d)); gg=Math.max(0,Math.min(255,gg+d)); b=Math.max(0,Math.min(255,b+d));
+    return '#'+((((r<<16)|(gg<<8)|b))>>>0).toString(16).padStart(6,'0'); };
   const SKIN=hexc(spec.skin), HAIR=hexc(spec.hair), EYEC=hexc(spec.eyeColor),
-        CLO=hexc(spec.clothes), BOT=hexc(spec.bottomColor), MOUTH='#9c3b3b', SHOE='#f2f2f2';
+        CLO=hexc(spec.clothes), BOT=hexc(spec.bottomColor),
+        CHEEK=hexc(spec.cheek!=null?spec.cheek:0xff9aa6), MOUTH='#9c3b3b', SHOE='#f2f2f2';
   const isSkirt = spec.bottomType==='スカート';
 
-  // canvas→ピクセル風マテリアル（NearestFilterでドット感を出す）
+  // canvas→ピクセル風マテリアル（NearestFilterでドット感）
   function mk(draw,w,h){
     const cv=document.createElement('canvas'); cv.width=w||16; cv.height=h||16;
     const x=cv.getContext('2d'); x.imageSmoothingEnabled=false; draw(x,cv.width,cv.height);
@@ -411,69 +422,86 @@ function buildCharacter(THREE, spec){
   const solid=(c,r=0.95)=>new THREE.MeshStandardMaterial({color:new THREE.Color(c), roughness:r});
   const F=(x,c,X,Y,W,H)=>{ x.fillStyle=c; x.fillRect(X,Y,W,H); };
 
-  // 髪型 → 塗りの被り具合（bangs:前髪の高さ, side:横の髪, back:後ろ髪, body:胴へ垂らす割合）
-  const HP=(()=>{ switch(spec.hairStyle){
-    case 'ロング':      return {bangs:11, side:true,  back:true,  body:0.80};
-    case 'ツインテール':return {bangs:11, side:true,  back:true,  body:0.55};
-    case 'ボブ':        return {bangs:13, side:true,  back:true,  body:0.18};
-    case 'ポニーテール':return {bangs:10, side:false, back:true,  body:0.50};
-    case 'アフロ':      return {bangs:15, side:true,  back:true,  body:0.0};
-    case 'お団子':      return {bangs:10, side:false, back:true,  body:0.0};
-    case '坊主':        return {bangs:0,  side:false, back:false, body:0.0, none:true};
-    default:            return {bangs:9,  side:false, back:true,  body:0.0}; // ショート
+  // 旧セーブの髪型名 → 新名称（髪型N）に正規化（ツインテールはロング=髪型2へ統合）
+  const HAIRMAP={'ショート':'髪型1','ロング':'髪型2','ツインテール':'髪型2','ボブ':'髪型3',
+                 'ポニーテール':'髪型4','アフロ':'髪型5','お団子':'髪型6','坊主':'髪型7'};
+  const style = HAIRMAP[spec.hairStyle] || spec.hairStyle || '髪型1';
+  const HP=(()=>{ switch(style){
+    case '髪型2': return {bangs:20, side:true,  back:true,  body:0.80}; // ロング
+    case '髪型3': return {bangs:24, side:true,  back:true,  body:0.18}; // ボブ
+    case '髪型4': return {bangs:18, side:false, back:true,  body:0.50}; // ポニーテール
+    case '髪型5': return {bangs:26, side:true,  back:true,  body:0.0};  // アフロ
+    case '髪型6': return {bangs:18, side:false, back:true,  body:0.0};  // お団子
+    case '髪型7': return {bangs:0,  side:false, back:false, body:0.0, none:true}; // 坊主
+    default:      return {bangs:16, side:false, back:true,  body:0.0};  // 髪型1（ショート）
   }})();
 
-  /* ===== 頭（直方体・各面を塗り分け） 32x32 ===== */
+  /* ===== 頭・前面（64x64・大きい目＆ほっぺ＆肌の陰影） ===== */
   function paintFront(x,w,h){
     F(x,SKIN,0,0,w,h);
-    if(HP.none) F(x,HAIR,0,0,w,4); else F(x,HAIR,0,0,w,HP.bangs);                          // 前髪
-    if(HP.side){ F(x,HAIR,0,0,4,Math.floor(h*0.70)); F(x,HAIR,w-4,0,4,Math.floor(h*0.70)); } // サイド
-    const eyeY=14, eyeW=6, eyeH=7, lx=6, rx=w-6-eyeW, dark=HAIR;
+    F(x,adj(SKIN,-14),0,0,8,h); F(x,adj(SKIN,-14),w-8,0,8,h);          // 輪郭の陰
+    F(x,adj(SKIN,12),14,8,w-28,6);                                     // 額の明るみ
+    if(HP.none) F(x,HAIR,0,0,w,8); else F(x,HAIR,0,0,w,HP.bangs);      // 前髪
+    if(HP.side){ F(x,HAIR,0,0,8,Math.floor(h*0.72)); F(x,HAIR,w-8,0,8,Math.floor(h*0.72)); } // サイド
+    const eyeW=16, eyeH=20, eyeY=28, lx=8, rx=w-8-eyeW, lash='#3a3340';
     function eye(ex,outer){
-      F(x,'#ffffff',ex,eyeY,eyeW,eyeH);
-      let iy=eyeY+1, ih=eyeH-2;
-      if(spec.eyeShape==='ジト目'){ F(x,SKIN,ex,eyeY,eyeW,2); F(x,SKIN,ex,eyeY+eyeH-2,eyeW,2); iy=eyeY+2; ih=2; }
-      else if(spec.eyeShape==='つり目'){ iy=eyeY+1; ih=eyeH-3; }
-      else if(spec.eyeShape==='たれ目'){ iy=eyeY+2; ih=eyeH-3; }
-      F(x,EYEC,ex+1,iy,eyeW-2,ih);                                   // 虹彩
-      F(x,'#ffffff',ex+(outer<0?eyeW-2:1),iy,1,1);                   // ハイライト
-      F(x,dark,ex,eyeY-1,eyeW,1);                                    // 上まつげ
-      if(spec.eyeShape==='つり目') F(x,dark,ex+(outer<0?0:eyeW-1),eyeY-2,1,2);    // 外側を上げる
-      if(spec.eyeShape==='たれ目') F(x,dark,ex+(outer<0?0:eyeW-1),eyeY+eyeH-1,1,2); // 外側を下げる
+      F(x,'#ffffff',ex,eyeY,eyeW,eyeH);                                // 白目
+      F(x,SKIN,ex,eyeY,2,2); F(x,SKIN,ex+eyeW-2,eyeY,2,2); F(x,SKIN,ex,eyeY+eyeH-2,2,2); F(x,SKIN,ex+eyeW-2,eyeY+eyeH-2,2,2); // 角丸
+      let iy=eyeY+3, ih=eyeH-6;
+      if(spec.eyeShape==='ジト目'){ F(x,SKIN,ex,eyeY,eyeW,6); iy=eyeY+9; ih=8; }
+      else if(spec.eyeShape==='つり目'){ iy=eyeY+2; }
+      else if(spec.eyeShape==='たれ目'){ iy=eyeY+5; }
+      F(x,adj(EYEC,-35),ex+2,iy,eyeW-4,ih);                            // 虹彩の縁
+      F(x,EYEC,ex+3,iy+1,eyeW-6,ih-3);                                 // 虹彩
+      F(x,'#1a1620',ex+(eyeW>>1)-2,iy+(ih>>1)-1,4,4);                  // 瞳孔
+      F(x,'#ffffff',ex+4,iy+2,4,4);                                    // 大ハイライト
+      F(x,'#ffffff',ex+eyeW-7,iy+ih-5,2,2);                            // 小ハイライト
+      F(x,lash,ex,eyeY-2,eyeW,3);                                      // 上まつげ
+      if(spec.eyeShape==='つり目') F(x,lash,ex+(outer<0?-1:eyeW-2),eyeY-4,3,4);
+      if(spec.eyeShape==='たれ目') F(x,lash,ex+(outer<0?-1:eyeW-2),eyeY+eyeH-3,3,4);
     }
     eye(lx,-1); eye(rx,1);
-    const cx=Math.floor(w/2);
-    if(spec.nose!=='小さい') F(x,'rgba(90,50,30,0.30)',cx-1,21,2, spec.nose==='つん'?1:2); else F(x,'rgba(90,50,30,0.25)',cx,22,1,1);
-    const my=26;                                                     // 口
-    if(spec.mouth==='にっこり'){ F(x,MOUTH,cx-3,my,6,1); F(x,MOUTH,cx-4,my-1,1,1); F(x,MOUTH,cx+3,my-1,1,1); }
-    else if(spec.mouth==='への字'){ F(x,MOUTH,cx-3,my,6,1); F(x,MOUTH,cx-4,my+1,1,1); F(x,MOUTH,cx+3,my+1,1,1); }
-    else { F(x,MOUTH,cx-1,my,2,2); }
-    F(x,'rgba(255,150,170,0.55)',4,23,3,2); F(x,'rgba(255,150,170,0.55)',w-7,23,3,2);       // ほっぺ
+    x.globalAlpha=0.72; F(x,CHEEK,5,eyeY+eyeH+1,13,7); F(x,CHEEK,w-18,eyeY+eyeH+1,13,7); x.globalAlpha=1; // ほっぺ
+    const cx=w>>1;
+    F(x,adj(SKIN,-22),cx-1,eyeY+eyeH-1,2,2);                           // 鼻
+    const my=eyeY+eyeH+9;                                              // 口
+    if(spec.mouth==='にっこり'){ F(x,MOUTH,cx-5,my,10,2); F(x,MOUTH,cx-6,my-2,2,2); F(x,MOUTH,cx+5,my-2,2,2); }
+    else if(spec.mouth==='への字'){ F(x,MOUTH,cx-5,my,10,2); F(x,MOUTH,cx-6,my+2,2,2); F(x,MOUTH,cx+5,my+2,2,2); }
+    else { F(x,MOUTH,cx-2,my,4,3); }
   }
   function paintSide(x,w,h){
-    F(x,SKIN,0,0,w,h);
+    F(x,SKIN,0,0,w,h); F(x,adj(SKIN,-12),0,Math.floor(h*0.5),w,Math.ceil(h*0.5)); // 下半分やや陰
     if(HP.none){ F(x,HAIR,0,0,w,3); return; }
-    F(x,HAIR,0,0,w, HP.side?Math.floor(h*0.74):Math.floor(h*0.32));
+    F(x,HAIR,0,0,w, HP.side?Math.floor(h*0.74):Math.floor(h*0.34));
   }
-  const paintTop=(x,w,h)=>F(x,HAIR,0,0,w,h);
-  const paintBottom=(x,w,h)=>F(x,SKIN,0,0,w,h);
-  function paintBack(x,w,h){ if(HP.back){ F(x,HAIR,0,0,w,h); } else { F(x,SKIN,0,0,w,h); F(x,HAIR,0,0,w,3); } }
+  const paintTop=(x,w,h)=>{ F(x,HAIR,0,0,w,h); F(x,adj(HAIR,15),Math.floor(w*0.3),Math.floor(h*0.25),Math.floor(w*0.4),Math.floor(h*0.3)); };
+  const paintBottom=(x,w,h)=>F(x,adj(SKIN,-18),0,0,w,h);
+  function paintBack(x,w,h){ if(HP.back){ F(x,HAIR,0,0,w,h); F(x,adj(HAIR,-12),0,Math.floor(h*0.6),w,Math.ceil(h*0.4)); } else { F(x,SKIN,0,0,w,h); F(x,HAIR,0,0,w,3); } }
 
   const headMats=[ mk(paintSide,32,32), mk(paintSide,32,32), mk(paintTop,32,32),
-                   mk(paintBottom,32,32), mk(paintFront,32,32), mk(paintBack,32,32) ];
+                   mk(paintBottom,32,32), mk(paintFront,64,64), mk(paintBack,32,32) ];
   const head=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.6,0.6), headMats);
   head.position.y=2.1; head.castShadow=true; g.add(head);
 
-  /* ===== 胴（長い髪は背面・側面に塗りで垂らす） ===== */
-  const drape=(base,frac)=>mk((x,w,h)=>{ F(x,base,0,0,w,h); if(frac>0) F(x,HAIR,0,0,w,Math.floor(h*frac)); },16,24);
+  /* ===== 胴（凝ったシャツ＋長い髪の垂らし） ===== */
+  const drape=(base,frac)=>mk((x,w,h)=>{ F(x,base,0,0,w,h); F(x,adj(base,-15),0,h-2,w,2); if(frac>0) F(x,HAIR,0,0,w,Math.floor(h*frac)); },16,24);
+  function shirtFront(x,w,h){
+    F(x,CLO,0,0,w,h);
+    F(x,'#ffffff',Math.floor(w*0.31),0,Math.floor(w*0.38),3);          // 襟
+    F(x,adj(CLO,-18),(w>>1),3,1,h-5);                                  // 中央の縫い目
+    F(x,adj(CLO,30),(w>>1),6,1,1); F(x,adj(CLO,30),(w>>1),11,1,1); F(x,adj(CLO,30),(w>>1),16,1,1); // ボタン
+    F(x,adj(CLO,16),1,4,2,h-6); F(x,adj(CLO,-18),w-2,4,1,h-6);         // 明暗の側面
+    F(x,adj(CLO,-20),0,h-2,w,2);                                       // 裾
+  }
   const sideFrac = HP.side? HP.body*0.7 : 0;
   const bodyMats=[ drape(CLO,sideFrac), drape(CLO,sideFrac), solid(CLO), solid(CLO),
-                   solid(CLO), drape(CLO,HP.body) ];
+                   mk(shirtFront,16,24), drape(CLO,HP.body) ];
   const body=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.9,0.3), bodyMats);
   body.position.y=1.35; body.castShadow=true; g.add(body);
 
-  /* ===== 腕（袖＝服色＋手＝肌色） ===== */
-  const armFace=()=>mk((x,w,h)=>{ F(x,CLO,0,0,w,h); F(x,SKIN,0,Math.floor(h*0.66),w,Math.ceil(h*0.34)); },8,24);
+  /* ===== 腕（袖＋袖口＋手） ===== */
+  const armFace=()=>mk((x,w,h)=>{ F(x,CLO,0,0,w,h); F(x,adj(CLO,-25),0,Math.floor(h*0.60),w,2);
+    F(x,SKIN,0,Math.floor(h*0.66),w,Math.ceil(h*0.34)); F(x,adj(SKIN,-16),0,h-2,w,2); },8,24);
   function arm(sx){
     const m=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.9,0.3),
       [armFace(),armFace(),solid(CLO),solid(SKIN),armFace(),armFace()]);
@@ -481,9 +509,10 @@ function buildCharacter(THREE, spec){
   }
   arm(-0.45); arm(0.45);
 
-  /* ===== 脚（ズボン/スカートで素肌切替・靴は足先） ===== */
+  /* ===== 脚（ズボン/スカートで素肌切替＋靴） ===== */
   const legTop = isSkirt? SKIN : BOT;
-  const legFace=()=>mk((x,w,h)=>{ F(x,legTop,0,0,w,h); F(x,SHOE,0,Math.floor(h*0.82),w,Math.ceil(h*0.18)); },8,24);
+  const legFace=()=>mk((x,w,h)=>{ F(x,legTop,0,0,w,h); F(x,adj(legTop,-22),0,0,1,Math.floor(h*0.82));
+    F(x,SHOE,0,Math.floor(h*0.82),w,Math.ceil(h*0.18)); F(x,adj(SHOE,-28),0,Math.floor(h*0.82),w,1); },8,24);
   function leg(sx){
     const m=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.9,0.3),
       [legFace(),legFace(),solid(legTop),solid(SHOE),legFace(),legFace()]);
@@ -492,7 +521,8 @@ function buildCharacter(THREE, spec){
   leg(-0.15); leg(0.15);
 
   if(isSkirt){
-    const skirt=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.4,0.42), solid(BOT));
+    const skirt=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.4,0.42),
+      mk((x,w,h)=>{ F(x,BOT,0,0,w,h); F(x,adj(BOT,-18),0,h-2,w,2); F(x,adj(BOT,14),0,0,w,2); },16,8));
     skirt.position.y=0.85; skirt.castShadow=true; g.add(skirt);
   }
 
@@ -504,16 +534,16 @@ function buildCharacter(THREE, spec){
 function defaultSpec(){
   return {
     name:"", mbti:"", 
-    skin:SKIN_COLORS[1], hair:HAIR_COLORS[0], hairStyle:"ショート",
+    skin:SKIN_COLORS[1], hair:HAIR_COLORS[0], hairStyle:"髪型1",
     clothes:CLOTHES_COLORS[0], bottomType:"ズボン", bottomColor:0x333333,
-    eyeShape:"丸目", eyeColor:EYE_COLORS[0], nose:"丸", mouth:"にっこり"
+    eyeShape:"丸目", eyeColor:EYE_COLORS[0], nose:"丸", mouth:"にっこり", cheek:CHEEK_COLORS[0]
   };
 }
 
 /* 外部に公開 */
 window.DOPA = window.DOPA || {};
 Object.assign(window.DOPA, {
-  MBTI,MBTI_CATCH,FOODS,CLOTHES,SKIN_COLORS,HAIR_COLORS,CLOTHES_COLORS,EYE_COLORS,
+  MBTI,MBTI_CATCH,FOODS,CLOTHES,SKIN_COLORS,HAIR_COLORS,CLOTHES_COLORS,EYE_COLORS,CHEEK_COLORS,
   HAIR_STYLES,EYE_SHAPES,NOSE_SHAPES,MOUTH_SHAPES,
   buildCharacter,defaultSpec,$,$$,showScreen,toast
 });
@@ -528,7 +558,7 @@ Object.assign(window.DOPA, {
 (function(){
 'use strict';
 const D = window.DOPA;
-const {MBTI,MBTI_CATCH,FOODS,CLOTHES,SKIN_COLORS,HAIR_COLORS,CLOTHES_COLORS,EYE_COLORS,
+const {MBTI,MBTI_CATCH,FOODS,CLOTHES,SKIN_COLORS,HAIR_COLORS,CLOTHES_COLORS,EYE_COLORS,CHEEK_COLORS,
        HAIR_STYLES,EYE_SHAPES,NOSE_SHAPES,MOUTH_SHAPES,buildCharacter,defaultSpec,
        $,$$,showScreen,toast} = D;
 
@@ -995,7 +1025,7 @@ window.DOPA.core = {
 const D = window.DOPA;
 const core = D.core;
 const THREE = window.THREE;
-const {MBTI,MBTI_CATCH,FOODS,CLOTHES,SKIN_COLORS,HAIR_COLORS,CLOTHES_COLORS,EYE_COLORS,
+const {MBTI,MBTI_CATCH,FOODS,CLOTHES,SKIN_COLORS,HAIR_COLORS,CLOTHES_COLORS,EYE_COLORS,CHEEK_COLORS,
        HAIR_STYLES,EYE_SHAPES,NOSE_SHAPES,MOUTH_SHAPES,buildCharacter,defaultSpec,
        $,$$,showScreen,toast} = D;
 const S = core.state;           // 同一参照を直接ミューテートする
@@ -1065,12 +1095,16 @@ function setMbti(m){
 function swHTML(col){ return '#'+col.toString(16).padStart(6,'0'); }
 function buildSwatches(sel,colors,getCur,setCur){
   const c=$(sel); c.innerHTML='';
+  const pick=document.createElement('input'); pick.type='color'; pick.className='swpick'; pick.title='カスタム色';
   colors.forEach(col=>{
     const d=document.createElement('div'); d.className='sw'; d.style.background=swHTML(col);
     if(col===getCur()) d.classList.add('sel');
-    d.onclick=()=>{ setCur(col); c.querySelectorAll('.sw').forEach(x=>x.classList.remove('sel')); d.classList.add('sel'); refreshMakerPreview(); };
+    d.onclick=()=>{ setCur(col); c.querySelectorAll('.sw').forEach(x=>x.classList.remove('sel')); d.classList.add('sel'); pick.value=swHTML(col); refreshMakerPreview(); };
     c.appendChild(d);
   });
+  pick.value=swHTML(getCur());
+  pick.oninput=()=>{ const v=parseInt(pick.value.slice(1),16); setCur(v); c.querySelectorAll('.sw').forEach(x=>x.classList.remove('sel')); refreshMakerPreview(); };
+  c.appendChild(pick);
 }
 function buildChips(sel,items,getCur,setCur){
   const c=$(sel); c.innerHTML='';
@@ -1088,6 +1122,7 @@ function buildMakerUI(){
   buildChips('#bottomType',BOTTOM_TYPES,()=>makerSpec.bottomType,v=>makerSpec.bottomType=v);
   buildSwatches('#swBottom',BOTTOM_COLORS,()=>makerSpec.bottomColor,v=>makerSpec.bottomColor=v);
   buildSwatches('#swSkin',SKIN_COLORS,()=>makerSpec.skin,v=>makerSpec.skin=v);
+  buildSwatches('#swCheek',CHEEK_COLORS,()=>makerSpec.cheek,v=>makerSpec.cheek=v);
   buildChips('#hairStyle',HAIR_STYLES,()=>makerSpec.hairStyle,v=>makerSpec.hairStyle=v);
   buildSwatches('#swHair',HAIR_COLORS,()=>makerSpec.hair,v=>makerSpec.hair=v);
   buildChips('#eyeShape',EYE_SHAPES,()=>makerSpec.eyeShape,v=>makerSpec.eyeShape=v);
@@ -1106,6 +1141,7 @@ function syncMakerUI(){
   reselect('#swClothes',CLOTHES_COLORS,makerSpec.clothes);
   reselect('#swBottom',BOTTOM_COLORS,makerSpec.bottomColor);
   reselect('#swSkin',SKIN_COLORS,makerSpec.skin);
+  reselect('#swCheek',CHEEK_COLORS,makerSpec.cheek);
   reselect('#swHair',HAIR_COLORS,makerSpec.hair);
   reselect('#swEye',EYE_COLORS,makerSpec.eyeColor);
   reselectChip('#bottomType',BOTTOM_TYPES,makerSpec.bottomType);
