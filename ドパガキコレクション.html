@@ -692,10 +692,49 @@ function animate(){
   const cx = Math.sin(camAngle)*camDist, cz = Math.cos(camAngle)*camDist;
   camera.position.set(cx, camHeight, cz);
   camera.lookAt(0,0.5,0);
-  // 会話判定
+  // 住人の徘徊→会話判定
+  updateWander(dt);
   updateConversations(dt);
   updateBubblePositions();
   renderer.render(scene,camera);
+}
+
+/* ---------- 住人の徘徊AI ---------- */
+const WANDER_SPEED = 0.85;   // 歩く速さ（ユニット/秒）
+function lerpAngle(a,b,t){ let d=b-a; while(d>Math.PI)d-=Math.PI*2; while(d<-Math.PI)d+=Math.PI*2; return a+d*t; }
+function faceTo(m,ox,oz){ m.rotation.y = Math.atan2(ox-m.position.x, oz-m.position.z); }
+function pickWanderTarget(cur){
+  for(let i=0;i<12;i++){
+    const a=Math.random()*Math.PI*2, dist=1.5+Math.random()*3.5;
+    const x=cur.x+Math.cos(a)*dist, z=cur.z+Math.sin(a)*dist;
+    if(Math.hypot(x,z)>ISLAND_R-1.0) continue;                                  // 島の外に出ない
+    if(state.buildings.some(b=>Math.hypot(b.pos.x-x,b.pos.z-z)<1.2)) continue;  // 建物に重ならない
+    return {x,z};
+  }
+  return {x:cur.x*0.6, z:cur.z*0.6};   // だめなら中心寄りへ
+}
+function updateWander(dt){
+  dt=Math.min(dt,0.05);                // タブ復帰時などの大ジャンプ防止
+  const now=performance.now();
+  for(const m of residentMeshes){
+    if(m===dragging) continue;         // ドラッグ中の住人は動かさない
+    const r=m.userData.resident;
+    let w=m.userData.wander;
+    if(!w){ w=m.userData.wander={target:{x:r.pos.x,z:r.pos.z}, pause:Math.random()*2.5}; }
+    if(m.userData.busyUntil && now<m.userData.busyUntil){ m.position.y=0.5; continue; } // 会話中は静止
+    if(w.pause>0){ w.pause-=dt; m.position.y=0.5; continue; }                            // 休憩中
+    const dx=w.target.x-m.position.x, dz=w.target.z-m.position.z;
+    const d=Math.hypot(dx,dz);
+    if(d<0.15){                        // 到着→少し休んで次の目的地へ
+      w.pause=1.0+Math.random()*3.0; w.target=pickWanderTarget(m.position);
+      m.position.y=0.5; continue;
+    }
+    const step=Math.min(d, WANDER_SPEED*dt);
+    m.position.x+=dx/d*step; m.position.z+=dz/d*step;
+    r.pos.x=m.position.x; r.pos.z=m.position.z;                                  // 保存用に同期
+    m.rotation.y = lerpAngle(m.rotation.y, Math.atan2(dx,dz), Math.min(1,dt*8)); // 進行方向を向く
+    m.position.y = 0.5 + Math.abs(Math.sin(now*0.012))*0.06;                     // てくてく上下
+  }
 }
 
 /* ---------- 島へ住人/建物を反映 ---------- */
@@ -827,7 +866,11 @@ function setupIslandInput(){
     const wasDragging = dragging;
     dragging = null;
     // 実際にドラッグして動かした場合のみ「移動」として確定し、タップ処理はしない
-    if(wasDragging && movedFar){ pointerDownPos=null; return; }
+    if(wasDragging && movedFar){
+      // ドロップ直後はその場で少し待機（すぐ歩き去らないように）
+      wasDragging.userData.wander={target:{x:wasDragging.position.x,z:wasDragging.position.z}, pause:2.0};
+      pointerDownPos=null; return;
+    }
     // それ以外（住人を軽くタップ／地面タップ／建物タップ）はタップ処理へ
     if(!movedFar){ handleTap(e); }
     pointerDownPos=null;
@@ -958,6 +1001,9 @@ function mbtiLine(mbti){
   return pool[Math.floor(Math.random()*pool.length)];
 }
 function startConvo(a,b){
+  const now=performance.now();
+  a.userData.busyUntil=now+2600; b.userData.busyUntil=now+2600;            // 会話中は立ち止まる
+  faceTo(a,b.position.x,b.position.z); faceTo(b,a.position.x,a.position.z); // 向き合う
   showMark(a,'❗'); showMark(b,'❗');
   setTimeout(()=>{ showBubble(a, mbtiLine(a.userData.resident.spec.mbti||"ENFP")); },300);
   setTimeout(()=>{ showBubble(b, mbtiLine(b.userData.resident.spec.mbti||"ISTJ")); },1100);
