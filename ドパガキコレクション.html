@@ -167,6 +167,17 @@
   .modal-card .row .btn{flex:1;}
   .shop-opts{display:flex;flex-direction:column;gap:10px;}
   .shop-opt.locked{opacity:.5;filter:grayscale(.45);}
+  #listScreen{background:linear-gradient(180deg,#8fd3ec,#cdeefb);}
+  .list-head{display:flex;align-items:center;justify-content:space-between;padding:16px 16px 8px;}
+  .list-title{font-size:20px;font-weight:900;color:var(--orange-d);}
+  #listScroll{flex:1;overflow-y:auto;padding:8px 14px calc(20px + env(safe-area-inset-bottom));display:flex;flex-direction:column;gap:12px;}
+  .res-card{background:#fff;border-radius:18px;padding:14px;box-shadow:var(--shadow);}
+  .res-card .rc-name{font-size:17px;font-weight:900;}
+  .res-card .rc-sub{font-size:12px;color:#777;font-weight:700;margin:2px 0 8px;}
+  .res-card .rc-stats{font-size:13px;font-weight:700;color:#444;line-height:1.7;margin-bottom:10px;}
+  .res-card .rc-btns{display:flex;gap:8px;}
+  .res-card .rc-btns .btn{flex:1;font-size:13px;padding:9px 4px;}
+  #dressGrid{max-height:46vh;}
   #hint{position:absolute;left:50%;top:14%;transform:translateX(-50%);background:rgba(40,44,52,.92);
     color:#fff;font-weight:800;padding:12px 18px;border-radius:16px;z-index:40;display:none;text-align:center;}
   #hint .btn{margin-top:10px;}
@@ -225,6 +236,7 @@
         <div class="info-pill gold"><span class="coin"></span><span id="hudGold">0</span> G</div>
       </div>
       <div class="top-right">
+        <button class="btn btn-grn btn-sm" id="listBtn">住人</button>
         <button class="btn btn-org btn-sm" id="saveBtn">セーブ</button>
         <button class="btn btn-red btn-sm" id="quitBtn">終了</button>
       </div>
@@ -311,6 +323,13 @@
     <button class="btn btn-gray btn-sm" id="houseBack">← 外に戻る</button>
   </section>
 
+  <!-- 住人リスト -->
+  <section id="listScreen" class="screen">
+    <div class="list-head"><div class="list-title">住人リスト</div>
+      <button class="btn btn-gray btn-sm" id="listBack">← 島へ</button></div>
+    <div id="listScroll"></div>
+  </section>
+
   <!-- 共通オーバーレイ -->
   <div id="toast"></div>
   <div id="saveBurst"><div class="b">💾 保存しました！</div></div>
@@ -323,6 +342,11 @@
       <button class="btn btn-org btn-lg shop-opt locked" data-mode="present" id="optPresent">🎁 プレゼント屋</button>
     </div>
     <button class="btn btn-gray btn-sm" id="shopCancel" style="margin-top:14px;">やめる</button>
+  </div></div>
+  <div class="modal" id="dressModal"><div class="modal-card">
+    <p id="dressName">きせかえ</p>
+    <div class="shop-grid" id="dressGrid"></div>
+    <button class="btn btn-gray btn-sm" id="dressClose" style="margin-top:12px;">とじる</button>
   </div></div>
   <div class="modal" id="quitModal"><div class="modal-card">
     <p>ゲームを終了しますか？<br>（セーブ済みの内容は残ります）</p>
@@ -400,6 +424,25 @@ const PRESENTS = [
   {id:"dice",   name:"サイコロ",price:140, emo:"🎲", trait:"P"},
   {id:"planner",name:"手帳",    price:150, emo:"📒", trait:"J"},
 ];
+// 衣装（上下＋靴下靴セット）。tier:'base'=最初から着せ替え可 / 'shop'=服屋で購入
+const OUTFITS = [
+  {id:'b0',name:'ベーシック赤',  tier:'base', emo:'👕', sw:0xe8412f, style:'basic', top:0xe8412f},
+  {id:'b1',name:'ベーシック青',  tier:'base', emo:'👕', sw:0x2d8cff, style:'basic', top:0x2d8cff},
+  {id:'b2',name:'ベーシック緑',  tier:'base', emo:'👕', sw:0x34c759, style:'basic', top:0x34c759},
+  {id:'b3',name:'ベーシック黄',  tier:'base', emo:'👕', sw:0xffd60a, style:'basic', top:0xffd60a},
+  {id:'b4',name:'ベーシック桃',  tier:'base', emo:'👕', sw:0xff5ea8, style:'basic', top:0xff5ea8},
+  {id:'b5',name:'ベーシック紫',  tier:'base', emo:'👕', sw:0x9b59f5, style:'basic', top:0x9b59f5},
+  {id:'b6',name:'ベーシック白',  tier:'base', emo:'👕', sw:0xffffff, style:'basic', top:0xffffff},
+  {id:'b7',name:'ベーシック黒',  tier:'base', emo:'👕', sw:0x222222, style:'basic', top:0x222222},
+  {id:'trendA',  name:'トレンドコーデA', tier:'shop', price:300, emo:'🧥', sw:0xefe7d6, style:'trendA', top:0xefe7d6, bottom:0x6f7a52, sock:0xffffff, shoe:0xffffff, acc:'necklace'},
+  {id:'trendB',  name:'トレンドコーデB', tier:'shop', price:300, emo:'🧶', sw:0xc9a37a, style:'trendB', top:0xc9a37a, sleeve:0xc9a37a, bottom:0x3a3f4a, sock:0x3a3f4a, shoe:0x5a3b22, acc:'earrings'},
+  {id:'bear',    name:'くまの着ぐるみ',   tier:'shop', price:600, emo:'🐻', sw:0x8a5a2b, style:'bear', top:0x8a5a2b, bottom:0x8a5a2b, sock:0x8a5a2b, shoe:0x6e4422},
+  {id:'blazerP', name:'ブレザー(ズボン)', tier:'shop', price:400, emo:'🎓', sw:0x1f2a44, style:'blazer', top:0x1f2a44, tie:0xc0392b, bottom:0x4a4f5a, sock:0xffffff, shoe:0x2b2b2b, skirt:false},
+  {id:'blazerS', name:'ブレザー(スカート)',tier:'shop', price:400, emo:'🎓', sw:0x1f2a44, style:'blazer', top:0x1f2a44, tie:0xc0392b, skirtCol:0x28324a, sock:0xffffff, shoe:0x2b2b2b, skirt:true},
+  {id:'suit',    name:'ズボンスーツ',     tier:'shop', price:500, emo:'🕴️', sw:0x2b2f38, style:'suit', top:0x2b2f38, tie:0x2d5fa0, bottom:0x2b2f38, sock:0x2b2f38, shoe:0x1a1a1a, skirt:false},
+  {id:'overall', name:'オーバーオール',   tier:'shop', price:350, emo:'👖', sw:0x3f6fa3, style:'overall', top:0x3f6fa3, tee:0xffffff, bottom:0x3f6fa3, sock:0xffffff, shoe:0xe8412f},
+  {id:'yukata',  name:'浴衣',            tier:'shop', price:450, emo:'🎐', sw:0xeaf2f7, style:'yukata', top:0xeaf2f7, pat:0x7fb0d6, obi:0xd65a7a, shoe:0x6e4422, skirt:true, acc:'hairpin'},
+];
 
 const SKIN_COLORS   = [0xffe0bd,0xf6c89a,0xe0ac80,0xf2a972,0x8d5524,0xc68642];
 const HAIR_COLORS   = [0x2b2b2b,0x6e4322,0xf2c200,0xe8412f,0x9b59f5,0xff5ea8,0x35c5d8];
@@ -429,12 +472,29 @@ function buildCharacter(THREE, spec){
   const adj = (hx,d)=>{ const n=parseInt(hx.slice(1),16); let r=(n>>16)&255,gg=(n>>8)&255,b=n&255;
     r=Math.max(0,Math.min(255,r+d)); gg=Math.max(0,Math.min(255,gg+d)); b=Math.max(0,Math.min(255,b+d));
     return '#'+((((r<<16)|(gg<<8)|b))>>>0).toString(16).padStart(6,'0'); };
+  const A=adj;
   const SKIN=hexc(spec.skin), HAIR=hexc(spec.hair), EYEC=hexc(spec.eyeColor),
-        CLO=hexc(spec.clothes), BOT=hexc(spec.bottomColor),
-        CHEEK=hexc(spec.cheek!=null?spec.cheek:0xff9aa6), MOUTH='#9c3b3b', SHOE='#f2f2f2';
-  const isSkirt = spec.bottomType==='スカート';
+        CHEEK=hexc(spec.cheek!=null?spec.cheek:0xff9aa6), MOUTH='#9c3b3b';
+  const isSkirtSpec = spec.bottomType==='スカート';
 
-  // canvas→ピクセル風マテリアル（NearestFilterでドット感）
+  // ===== 衣装の解決 =====
+  const cfg = (typeof OUTFITS!=='undefined' && OUTFITS.find(o=>o.id===spec._outfit)) || {style:'default'};
+  const STY = cfg.style||'default';
+  const isBear = STY==='bear';
+  const oTop    = hexc(cfg.top!=null?cfg.top:spec.clothes);
+  const oSleeve = hexc(cfg.sleeve!=null?cfg.sleeve:(cfg.top!=null?cfg.top:spec.clothes));
+  const oBottom = hexc(cfg.bottom!=null?cfg.bottom:spec.bottomColor);
+  const oSock   = hexc(cfg.sock!=null?cfg.sock:0xffffff);
+  const oShoe   = hexc(cfg.shoe!=null?cfg.shoe:0xf2f2f2);
+  const oTie    = hexc(cfg.tie!=null?cfg.tie:0xc0392b);
+  const oPat    = hexc(cfg.pat!=null?cfg.pat:0x7fb0d6);
+  const oObi    = hexc(cfg.obi!=null?cfg.obi:0xd65a7a);
+  const oTee    = hexc(cfg.tee!=null?cfg.tee:0xffffff);
+  const oSkirtCol = hexc(cfg.skirtCol!=null?cfg.skirtCol:(cfg.bottom!=null?cfg.bottom:spec.bottomColor));
+  const acc = cfg.acc||null;
+  const isSkirt2 = (STY==='basic'||STY==='default') ? isSkirtSpec : !!cfg.skirt;
+
+  // canvas→ピクセル風マテリアル
   function mk(draw,w,h){
     const cv=document.createElement('canvas'); cv.width=w||16; cv.height=h||16;
     const x=cv.getContext('2d'); x.imageSmoothingEnabled=false; draw(x,cv.width,cv.height);
@@ -442,114 +502,183 @@ function buildCharacter(THREE, spec){
     return new THREE.MeshStandardMaterial({map:t, roughness:0.95, metalness:0});
   }
   const solid=(c,r=0.95)=>new THREE.MeshStandardMaterial({color:new THREE.Color(c), roughness:r});
-  const F=(x,c,X,Y,W,H)=>{ x.fillStyle=c; x.fillRect(X,Y,W,H); };
+  const F=(x,c,X,Y,W,H)=>{ x.fillStyle=c; x.fillRect(X|0,Y|0,Math.max(1,W|0),Math.max(1,H|0)); };
 
-  // 旧セーブの髪型名 → 新名称（髪型N）に正規化（ツインテールはロング=髪型2へ統合）
+  // ===== 髪型→塗りの被り具合（くま着ぐるみはフード化） =====
   const HAIRMAP={'ショート':'髪型1','ロング':'髪型2','ツインテール':'髪型2','ボブ':'髪型3',
                  'ポニーテール':'髪型4','アフロ':'髪型5','お団子':'髪型6','坊主':'髪型7'};
-  const style = HAIRMAP[spec.hairStyle] || spec.hairStyle || '髪型1';
-  const HP=(()=>{ switch(style){
-    case '髪型2': return {bangs:20, side:true,  back:true,  body:0.80}; // ロング
-    case '髪型3': return {bangs:24, side:true,  back:true,  body:0.18}; // ボブ
-    case '髪型4': return {bangs:18, side:false, back:true,  body:0.50}; // ポニーテール
-    case '髪型5': return {bangs:26, side:true,  back:true,  body:0.0};  // アフロ
-    case '髪型6': return {bangs:18, side:false, back:true,  body:0.0};  // お団子
-    case '髪型7': return {bangs:0,  side:false, back:false, body:0.0, none:true}; // 坊主
-    default:      return {bangs:16, side:false, back:true,  body:0.0};  // 髪型1（ショート）
+  const hstyle = HAIRMAP[spec.hairStyle] || spec.hairStyle || '髪型1';
+  let HP=(()=>{ switch(hstyle){
+    case '髪型2': return {bangs:20, side:true,  back:true,  body:0.80};
+    case '髪型3': return {bangs:24, side:true,  back:true,  body:0.18};
+    case '髪型4': return {bangs:18, side:false, back:true,  body:0.50};
+    case '髪型5': return {bangs:26, side:true,  back:true,  body:0.0};
+    case '髪型6': return {bangs:18, side:false, back:true,  body:0.0};
+    case '髪型7': return {bangs:0,  side:false, back:false, body:0.0, none:true};
+    default:      return {bangs:16, side:false, back:true,  body:0.0};
   }})();
+  const HAIRCOL = isBear ? '#7a4a22' : HAIR;
+  if(isBear) HP={bangs:30, side:true, back:true, body:0};
 
-  /* ===== 頭・前面（64x64・大きい目＆ほっぺ＆肌の陰影） ===== */
+  /* ===== 頭・前面（64x64） ===== */
   function paintFront(x,w,h){
     F(x,SKIN,0,0,w,h);
-    F(x,adj(SKIN,-14),0,0,8,h); F(x,adj(SKIN,-14),w-8,0,8,h);          // 輪郭の陰
-    F(x,adj(SKIN,12),14,8,w-28,6);                                     // 額の明るみ
-    if(HP.none) F(x,HAIR,0,0,w,8); else F(x,HAIR,0,0,w,HP.bangs);      // 前髪
-    if(HP.side){ F(x,HAIR,0,0,8,Math.floor(h*0.72)); F(x,HAIR,w-8,0,8,Math.floor(h*0.72)); } // サイド
+    F(x,A(SKIN,-14),0,0,8,h); F(x,A(SKIN,-14),w-8,0,8,h);
+    F(x,A(SKIN,12),14,8,w-28,6);
+    if(HP.none) F(x,HAIRCOL,0,0,w,8); else F(x,HAIRCOL,0,0,w,HP.bangs);
+    if(HP.side){ F(x,HAIRCOL,0,0,8,Math.floor(h*0.72)); F(x,HAIRCOL,w-8,0,8,Math.floor(h*0.72)); }
     const eyeW=16, eyeH=20, eyeY=28, lx=8, rx=w-8-eyeW, lash='#3a3340';
     function eye(ex,outer){
-      F(x,'#ffffff',ex,eyeY,eyeW,eyeH);                                // 白目
-      F(x,SKIN,ex,eyeY,2,2); F(x,SKIN,ex+eyeW-2,eyeY,2,2); F(x,SKIN,ex,eyeY+eyeH-2,2,2); F(x,SKIN,ex+eyeW-2,eyeY+eyeH-2,2,2); // 角丸
+      F(x,'#ffffff',ex,eyeY,eyeW,eyeH);
+      F(x,SKIN,ex,eyeY,2,2); F(x,SKIN,ex+eyeW-2,eyeY,2,2); F(x,SKIN,ex,eyeY+eyeH-2,2,2); F(x,SKIN,ex+eyeW-2,eyeY+eyeH-2,2,2);
       let iy=eyeY+3, ih=eyeH-6;
       if(spec.eyeShape==='ジト目'){ F(x,SKIN,ex,eyeY,eyeW,6); iy=eyeY+9; ih=8; }
       else if(spec.eyeShape==='つり目'){ iy=eyeY+2; }
       else if(spec.eyeShape==='たれ目'){ iy=eyeY+5; }
-      F(x,adj(EYEC,-35),ex+2,iy,eyeW-4,ih);                            // 虹彩の縁
-      F(x,EYEC,ex+3,iy+1,eyeW-6,ih-3);                                 // 虹彩
-      F(x,'#1a1620',ex+(eyeW>>1)-2,iy+(ih>>1)-1,4,4);                  // 瞳孔
-      F(x,'#ffffff',ex+4,iy+2,4,4);                                    // 大ハイライト
-      F(x,'#ffffff',ex+eyeW-7,iy+ih-5,2,2);                            // 小ハイライト
-      F(x,lash,ex,eyeY-2,eyeW,3);                                      // 上まつげ
+      F(x,A(EYEC,-35),ex+2,iy,eyeW-4,ih);
+      F(x,EYEC,ex+3,iy+1,eyeW-6,ih-3);
+      F(x,'#1a1620',ex+(eyeW>>1)-2,iy+(ih>>1)-1,4,4);
+      F(x,'#ffffff',ex+4,iy+2,4,4);
+      F(x,'#ffffff',ex+eyeW-7,iy+ih-5,2,2);
+      F(x,lash,ex,eyeY-2,eyeW,3);
       if(spec.eyeShape==='つり目') F(x,lash,ex+(outer<0?-1:eyeW-2),eyeY-4,3,4);
       if(spec.eyeShape==='たれ目') F(x,lash,ex+(outer<0?-1:eyeW-2),eyeY+eyeH-3,3,4);
     }
     eye(lx,-1); eye(rx,1);
-    x.globalAlpha=0.72; F(x,CHEEK,5,eyeY+eyeH+1,13,7); F(x,CHEEK,w-18,eyeY+eyeH+1,13,7); x.globalAlpha=1; // ほっぺ
+    x.globalAlpha=0.72; F(x,CHEEK,5,eyeY+eyeH+1,13,7); F(x,CHEEK,w-18,eyeY+eyeH+1,13,7); x.globalAlpha=1;
     const cx=w>>1;
-    F(x,adj(SKIN,-22),cx-1,eyeY+eyeH-1,2,2);                           // 鼻
-    const my=eyeY+eyeH+9;                                              // 口
+    F(x,A(SKIN,-22),cx-1,eyeY+eyeH-1,2,2);
+    const my=eyeY+eyeH+9;
     if(spec.mouth==='にっこり'){ F(x,MOUTH,cx-5,my,10,2); F(x,MOUTH,cx-6,my-2,2,2); F(x,MOUTH,cx+5,my-2,2,2); }
     else if(spec.mouth==='への字'){ F(x,MOUTH,cx-5,my,10,2); F(x,MOUTH,cx-6,my+2,2,2); F(x,MOUTH,cx+5,my+2,2,2); }
     else { F(x,MOUTH,cx-2,my,4,3); }
+    // 髪飾り（ピン/花）アクセサリー
+    if(acc==='hairpin'){ F(x,'#ff4f9e',9,HP.bangs-3,5,5); F(x,'#ffd60a',11,HP.bangs-1,1,1); }
   }
   function paintSide(x,w,h){
-    F(x,SKIN,0,0,w,h); F(x,adj(SKIN,-12),0,Math.floor(h*0.5),w,Math.ceil(h*0.5)); // 下半分やや陰
-    if(HP.none){ F(x,HAIR,0,0,w,3); return; }
-    F(x,HAIR,0,0,w, HP.side?Math.floor(h*0.74):Math.floor(h*0.34));
+    F(x,SKIN,0,0,w,h); F(x,A(SKIN,-12),0,Math.floor(h*0.5),w,Math.ceil(h*0.5));
+    if(HP.none){ F(x,HAIRCOL,0,0,w,3); }
+    else F(x,HAIRCOL,0,0,w, HP.side?Math.floor(h*0.74):Math.floor(h*0.34));
+    if(acc==='earrings'){ F(x,'#f2c200',w-6,Math.floor(h*0.62),3,3); F(x,'#fff3b0',w-6,Math.floor(h*0.62),1,1); }
   }
-  const paintTop=(x,w,h)=>{ F(x,HAIR,0,0,w,h); F(x,adj(HAIR,15),Math.floor(w*0.3),Math.floor(h*0.25),Math.floor(w*0.4),Math.floor(h*0.3)); };
-  const paintBottom=(x,w,h)=>F(x,adj(SKIN,-18),0,0,w,h);
-  function paintBack(x,w,h){ if(HP.back){ F(x,HAIR,0,0,w,h); F(x,adj(HAIR,-12),0,Math.floor(h*0.6),w,Math.ceil(h*0.4)); } else { F(x,SKIN,0,0,w,h); F(x,HAIR,0,0,w,3); } }
+  const paintTop=(x,w,h)=>{ F(x,HAIRCOL,0,0,w,h); F(x,A(HAIRCOL,15),Math.floor(w*0.3),Math.floor(h*0.25),Math.floor(w*0.4),Math.floor(h*0.3)); };
+  const paintBottom=(x,w,h)=>F(x,A(SKIN,-18),0,0,w,h);
+  function paintBack(x,w,h){ if(HP.back){ F(x,HAIRCOL,0,0,w,h); F(x,A(HAIRCOL,-12),0,Math.floor(h*0.6),w,Math.ceil(h*0.4)); } else { F(x,SKIN,0,0,w,h); F(x,HAIRCOL,0,0,w,3); } }
 
   const headMats=[ mk(paintSide,32,32), mk(paintSide,32,32), mk(paintTop,32,32),
                    mk(paintBottom,32,32), mk(paintFront,64,64), mk(paintBack,32,32) ];
   const head=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.6,0.6), headMats);
   head.position.y=2.1; head.castShadow=true; g.add(head);
-
-  /* ===== 胴（凝ったシャツ＋長い髪の垂らし） ===== */
-  const drape=(base,frac)=>mk((x,w,h)=>{ F(x,base,0,0,w,h); F(x,adj(base,-15),0,h-2,w,2); if(frac>0) F(x,HAIR,0,0,w,Math.floor(h*frac)); },16,24);
-  function shirtFront(x,w,h){
-    F(x,CLO,0,0,w,h);
-    F(x,'#ffffff',Math.floor(w*0.31),0,Math.floor(w*0.38),3);          // 襟
-    F(x,adj(CLO,-18),(w>>1),3,1,h-5);                                  // 中央の縫い目
-    F(x,adj(CLO,30),(w>>1),6,1,1); F(x,adj(CLO,30),(w>>1),11,1,1); F(x,adj(CLO,30),(w>>1),16,1,1); // ボタン
-    F(x,adj(CLO,16),1,4,2,h-6); F(x,adj(CLO,-18),w-2,4,1,h-6);         // 明暗の側面
-    F(x,adj(CLO,-20),0,h-2,w,2);                                       // 裾
+  if(isBear){ // くまの耳
+    const earO=solid('#8a5a2b'), earI=solid('#d9b38c');
+    [-0.2,0.2].forEach(sx=>{
+      const e=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.2,0.13), earO); e.position.set(sx,2.5,0); e.castShadow=true; g.add(e);
+      const ie=new THREE.Mesh(new THREE.BoxGeometry(0.1,0.1,0.06), earI); ie.position.set(sx,2.5,0.07); g.add(ie);
+    });
   }
+
+  /* ===== 胴 ===== */
+  function drawBody(x,w,h){
+    const cx=w>>1, hem=Math.max(2,(h*0.05)|0);
+    F(x,oTop,0,0,w,h);
+    F(x,A(oTop,16),0,0,Math.max(1,(w*0.06)|0),h); F(x,A(oTop,-18),w-((w*0.06)|0),0,(w*0.06)|0,h);
+    F(x,A(oTop,-20),0,h-hem,w,hem);
+    if(STY==='trendA'){
+      F(x,A(oTop,-12),(w*0.30)|0,0,(w*0.40)|0,(h*0.07)|0);
+      F(x,'#b85c4a',(w*0.42)|0,(h*0.30)|0,(w*0.16)|0,(h*0.10)|0);
+      F(x,'#cfd4da',(w*0.36)|0,(h*0.08)|0,(w*0.28)|0,1);
+      F(x,'#cfd4da',cx-1,(h*0.08)|0,2,(h*0.06)|0); F(x,'#eef1f4',cx-1,(h*0.14)|0,2,2);
+    } else if(STY==='trendB'){
+      for(let yy=0; yy<h; yy+=3) F(x,A(oTop,-12),0,yy,w,1);
+      F(x,A(oTop,-22),(w*0.30)|0,0,(w*0.40)|0,(h*0.12)|0);
+    } else if(STY==='bear'){
+      F(x,'#d9b38c',(w*0.26)|0,(h*0.30)|0,(w*0.48)|0,(h*0.52)|0);
+      F(x,oTop,(w*0.26)|0,(h*0.30)|0,3,3); F(x,oTop,(w*0.74)|0-3,(h*0.30)|0,3,3);
+    } else if(STY==='blazer'||STY==='suit'){
+      F(x,'#ffffff',(w*0.40)|0,0,(w*0.20)|0,h);
+      for(let i=0;i<((h*0.5)|0);i++){ const o=(i*0.3)|0; F(x,oTop,((w*0.40)|0)-1-o,i,2,1); F(x,oTop,((w*0.60)|0)+o,i,2,1); }
+      F(x,oTie,cx-1,(h*0.06)|0,3,(h*0.5)|0); F(x,A(oTie,-25),cx-1,(h*0.06)|0,3,2);
+      F(x,'#ffffff',(w*0.36)|0,0,(w*0.28)|0,2);
+    } else if(STY==='overall'){
+      F(x,oTee,0,0,w,h);
+      F(x,oTop,(w*0.18)|0,(h*0.28)|0,(w*0.64)|0,h-((h*0.28)|0));
+      F(x,oTop,(w*0.24)|0,0,(w*0.10)|0,(h*0.30)|0); F(x,oTop,(w*0.66)|0,0,(w*0.10)|0,(h*0.30)|0);
+      F(x,A(oTop,-15),(w*0.40)|0,(h*0.46)|0,(w*0.20)|0,(h*0.18)|0); F(x,A(oTop,18),(w*0.40)|0,(h*0.46)|0,(w*0.20)|0,1);
+      F(x,'#e0b84d',(w*0.28)|0,(h*0.30)|0,2,2); F(x,'#e0b84d',(w*0.70)|0,(h*0.30)|0,2,2);
+    } else if(STY==='yukata'){
+      for(let yy=2; yy<h*0.68; yy+=6) for(let xx=2; xx<w; xx+=6) F(x,oPat,xx,yy,2,2);
+      for(let i=0;i<((h*0.55)|0);i++){ const o=(i*0.22)|0; F(x,'#ffffff',cx-1-o,i,2,1); F(x,'#ffffff',cx-1+o,i,2,1); }
+      F(x,oObi,0,(h*0.70)|0,w,(h*0.16)|0); F(x,A(oObi,-22),0,(h*0.70)|0,w,1); F(x,A(oObi,18),0,(h*0.84)|0,w,1);
+    } else { // basic / default
+      F(x,'#ffffff',(w*0.31)|0,0,(w*0.38)|0,Math.max(2,(h*0.08)|0));
+      F(x,A(oTop,-18),cx,(h*0.10)|0,1,h);
+      for(let i=0;i<3;i++) F(x,A(oTop,30),cx,((h*0.18)|0)+i*((h*0.18)|0),1,2);
+    }
+  }
+  const drape=(frac)=>mk((x,w,h)=>{ F(x,oTop,0,0,w,h); F(x,A(oTop,-15),0,h-2,w,2); if(frac>0&&!isBear) F(x,HAIRCOL,0,0,w,Math.floor(h*frac)); },16,24);
   const sideFrac = HP.side? HP.body*0.7 : 0;
-  const bodyMats=[ drape(CLO,sideFrac), drape(CLO,sideFrac), solid(CLO), solid(CLO),
-                   mk(shirtFront,16,24), drape(CLO,HP.body) ];
+  const bodyMats=[ drape(sideFrac), drape(sideFrac), solid(oTop), solid(oTop), mk(drawBody,32,48), drape(HP.body) ];
   const body=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.9,0.3), bodyMats);
   body.position.y=1.35; body.castShadow=true; g.add(body);
 
-  /* ===== 腕（肩を支点に振れるよう pivot 化） ===== */
-  const armFace=()=>mk((x,w,h)=>{ F(x,CLO,0,0,w,h); F(x,adj(CLO,-25),0,Math.floor(h*0.60),w,2);
-    F(x,SKIN,0,Math.floor(h*0.66),w,Math.ceil(h*0.34)); F(x,adj(SKIN,-16),0,h-2,w,2); },8,24);
+  /* ===== 腕 ===== */
+  function drawArm(x,w,h){
+    if(STY==='bear'){ F(x,'#8a5a2b',0,0,w,h); F(x,'#6e4422',0,(h*0.82)|0,w,h-((h*0.82)|0)); return; }
+    if(STY==='overall'){ F(x,oTee,0,0,w,h); F(x,SKIN,0,(h*0.5)|0,w,h-((h*0.5)|0)); F(x,A(SKIN,-16),0,h-2,w,2); return; }
+    if(STY==='trendB'){ F(x,oSleeve,0,0,w,h); for(let yy=0;yy<h*0.66;yy+=3)F(x,A(oSleeve,-12),0,yy,w,1); F(x,SKIN,0,(h*0.66)|0,w,h-((h*0.66)|0)); F(x,A(SKIN,-16),0,h-2,w,2); return; }
+    if(STY==='yukata'){ F(x,oTop,0,0,w,h); for(let yy=2;yy<h*0.72;yy+=6)for(let xx=2;xx<w;xx+=6)F(x,oPat,xx,yy,2,2); F(x,SKIN,0,(h*0.80)|0,w,h-((h*0.80)|0)); return; }
+    if(STY==='blazer'||STY==='suit'){ F(x,oTop,0,0,w,h); F(x,A(oTop,-25),0,(h*0.58)|0,w,2); F(x,'#ffffff',0,(h*0.60)|0,w,2); F(x,SKIN,0,(h*0.66)|0,w,h-((h*0.66)|0)); F(x,A(SKIN,-16),0,h-2,w,2); return; }
+    // basic / trendA / default
+    F(x,oSleeve,0,0,w,h); F(x,A(oSleeve,-25),0,(h*0.60)|0,w,2); F(x,SKIN,0,(h*0.66)|0,w,h-((h*0.66)|0)); F(x,A(SKIN,-16),0,h-2,w,2);
+  }
+  const armFace=()=>mk(drawArm,16,48);
+  const armHandCap = (STY==='bear') ? solid('#6e4422') : solid(SKIN);
+  const armTopCap  = solid(oSleeve);
   const armPivots=[];
   function arm(sx){
-    const piv=new THREE.Group(); piv.position.set(sx,1.8,0);            // 肩
+    const piv=new THREE.Group(); piv.position.set(sx,1.8,0);
     const m=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.9,0.3),
-      [armFace(),armFace(),solid(CLO),solid(SKIN),armFace(),armFace()]);
+      [armFace(),armFace(),armTopCap,armHandCap,armFace(),armFace()]);
     m.position.y=-0.45; m.castShadow=true; piv.add(m); g.add(piv); armPivots.push(piv);
   }
   arm(-0.45); arm(0.45);
 
-  /* ===== 脚（股関節を支点に振れるよう pivot 化／ズボン・スカート＋靴） ===== */
-  const legTop = isSkirt? SKIN : BOT;
-  const legFace=()=>mk((x,w,h)=>{ F(x,legTop,0,0,w,h); F(x,adj(legTop,-22),0,0,1,Math.floor(h*0.82));
-    F(x,SHOE,0,Math.floor(h*0.82),w,Math.ceil(h*0.18)); F(x,adj(SHOE,-28),0,Math.floor(h*0.82),w,1); },8,24);
+  /* ===== 脚 ===== */
+  function drawLeg(x,w,h){
+    if(STY==='bear'){ F(x,'#8a5a2b',0,0,w,h); F(x,'#6e4422',0,(h*0.80)|0,w,h-((h*0.80)|0)); return; }
+    if(STY==='yukata'){ F(x,SKIN,0,0,w,h); F(x,'#ffffff',0,(h*0.70)|0,w,(h*0.14)|0); F(x,'#6e4422',0,(h*0.86)|0,w,h-((h*0.86)|0)); return; }
+    let bottomCol = ((STY==='basic'||STY==='default') && isSkirt2) ? SKIN : oBottom;
+    F(x,bottomCol,0,0,w,h);
+    F(x,A(bottomCol,-22),0,0,1,(h*0.80)|0);
+    F(x,oSock,0,(h*0.72)|0,w,(h*0.10)|0);
+    F(x,oShoe,0,(h*0.82)|0,w,h-((h*0.82)|0));
+    F(x,A(oShoe,-25),0,(h*0.82)|0,w,1);
+  }
+  const legFace=()=>mk(drawLeg,16,48);
+  let legTopCap = ((STY==='basic'||STY==='default') && isSkirt2) ? solid(SKIN) : (STY==='bear'?solid('#8a5a2b'):(STY==='yukata'?solid(SKIN):solid(oBottom)));
+  let legBotCap = (STY==='bear')?solid('#6e4422'):(STY==='yukata'?solid('#6e4422'):solid(oShoe));
   const legPivots=[];
   function leg(sx){
-    const piv=new THREE.Group(); piv.position.set(sx,0.9,0);            // 股関節
+    const piv=new THREE.Group(); piv.position.set(sx,0.9,0);
     const m=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.9,0.3),
-      [legFace(),legFace(),solid(legTop),solid(SHOE),legFace(),legFace()]);
+      [legFace(),legFace(),legTopCap,legBotCap,legFace(),legFace()]);
     m.position.y=-0.45; m.castShadow=true; piv.add(m); g.add(piv); legPivots.push(piv);
   }
   leg(-0.15); leg(0.15);
 
-  if(isSkirt){
-    const skirt=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.4,0.42),
-      mk((x,w,h)=>{ F(x,BOT,0,0,w,h); F(x,adj(BOT,-18),0,h-2,w,2); F(x,adj(BOT,14),0,0,w,2); },16,8));
-    skirt.position.y=0.85; skirt.castShadow=true; g.add(skirt);
+  /* ===== スカート/ロング下衣 ===== */
+  if(isSkirt2){
+    const tall = (STY==='yukata');
+    const skirtMat = mk((x,w,h)=>{
+      if(STY==='yukata'){ F(x,oTop,0,0,w,h); for(let yy=1;yy<h;yy+=4)for(let xx=1;xx<w;xx+=5)F(x,oPat,xx,yy,2,2); F(x,oObi,0,0,w,2); }
+      else if(STY==='blazer'){ const c=oSkirtCol; F(x,c,0,0,w,h);
+        for(let xx=0;xx<w;xx+=4)F(x,A(c,20),xx,0,1,h); for(let yy=0;yy<h;yy+=4)F(x,A(c,20),0,yy,w,1);
+        for(let xx=2;xx<w;xx+=4)F(x,A(c,-18),xx,0,1,h); }
+      else { F(x,oBottom,0,0,w,h); F(x,A(oBottom,-18),0,h-2,w,2); F(x,A(oBottom,14),0,0,w,2); }
+    },16,8);
+    const sh = tall? 0.55 : 0.4;
+    const skirt=new THREE.Mesh(new THREE.BoxGeometry(0.72,sh,0.44), skirtMat);
+    skirt.position.y = tall? 0.78 : 0.85; skirt.castShadow=true; g.add(skirt);
   }
 
   g.userData.spec = spec; g.userData.armPivots=armPivots; g.userData.legPivots=legPivots;
@@ -569,7 +698,7 @@ function defaultSpec(){
 /* 外部に公開 */
 window.DOPA = window.DOPA || {};
 Object.assign(window.DOPA, {
-  MBTI,MBTI_CATCH,FOODS,CLOTHES,PRESENTS,SKIN_COLORS,HAIR_COLORS,CLOTHES_COLORS,EYE_COLORS,CHEEK_COLORS,
+  MBTI,MBTI_CATCH,FOODS,CLOTHES,PRESENTS,OUTFITS,SKIN_COLORS,HAIR_COLORS,CLOTHES_COLORS,EYE_COLORS,CHEEK_COLORS,
   HAIR_STYLES,EYE_SHAPES,NOSE_SHAPES,MOUTH_SHAPES,
   buildCharacter,defaultSpec,$,$$,showScreen,toast
 });
@@ -584,7 +713,7 @@ Object.assign(window.DOPA, {
 (function(){
 'use strict';
 const D = window.DOPA;
-const {MBTI,MBTI_CATCH,FOODS,CLOTHES,PRESENTS,SKIN_COLORS,HAIR_COLORS,CLOTHES_COLORS,EYE_COLORS,CHEEK_COLORS,
+const {MBTI,MBTI_CATCH,FOODS,CLOTHES,PRESENTS,OUTFITS,SKIN_COLORS,HAIR_COLORS,CLOTHES_COLORS,EYE_COLORS,CHEEK_COLORS,
        HAIR_STYLES,EYE_SHAPES,NOSE_SHAPES,MOUTH_SHAPES,buildCharacter,defaultSpec,
        $,$$,showScreen,toast} = D;
 
@@ -602,6 +731,7 @@ let THREE = window.THREE;
 let scene,camera,renderer,clock;
 let islandGroup, residentMeshes=[], buildingMeshes=[];
 let camAngle = 0.0, camTargetAngle=0.0, camDist=23, camTargetDist=23, camHeight=16;
+let camLookX=0, camLookZ=0, camTargetLookX=0, camTargetLookZ=0;
 const ISLAND_R = 11;
 let raycaster, pointer;
 let curMode = "move";
@@ -664,7 +794,9 @@ function animate(){
   camDist  += (camTargetDist  - camDist )*Math.min(1,dt*6);
   const cx = Math.sin(camAngle)*camDist, cz = Math.cos(camAngle)*camDist;
   camera.position.set(cx, camHeight, cz);
-  camera.lookAt(0,0.5,0);
+  camLookX += (camTargetLookX-camLookX)*Math.min(1,dt*6);
+  camLookZ += (camTargetLookZ-camLookZ)*Math.min(1,dt*6);
+  camera.lookAt(camLookX,0.5,camLookZ);
   // 住人の徘徊→会話判定
   updateWander(dt);
   updateConversations(dt);
@@ -737,7 +869,7 @@ function rebuildIsland(){
   });
   state.residents.forEach((r,i)=>{
     const spec = Object.assign({}, r.spec);
-    if(r.clothId!=null){ const c=CLOTHES.find(c=>c.id===r.clothId); if(c) spec.clothes=c.color; }
+    spec._outfit = r.outfitId||null;
     spec._level = r.level||1;
     const m = buildCharacter(THREE, spec);
     m.scale.set(0.85,0.85,0.85);
@@ -956,6 +1088,7 @@ function setupCamStick(){
     const max=44, d=Math.hypot(dx,dy); if(d>max){ dx=dx/d*max; dy=dy/d*max; }
     knob.style.transform=`translate(${dx}px,${dy}px)`;
     camTargetAngle += dx*0.0009;     // 左右で回転
+    camTargetLookX=0; camTargetLookZ=0;   // パンでクローズアップ解除
     camTargetDist = Math.max(9,Math.min(32, camTargetDist + dy*0.02)); // 上下で寄り引き
   }
   function end(){ active=false; knob.style.transform='translate(0,0)'; }
@@ -1055,6 +1188,7 @@ window.DOPA.core = {
   get THREE(){return THREE;},
   initScene, rebuildIsland, setupIslandInput, setupCamStick, setMode, refreshHUD,
   getResidentMeshes:()=>residentMeshes,
+  focusResident:(res)=>{ camTargetLookX=res.pos.x; camTargetLookZ=res.pos.z; camTargetDist=Math.min(camTargetDist,11); },
   setModeRef:(m)=>{curMode=m;}
 };
 
@@ -1070,7 +1204,7 @@ window.DOPA.core = {
 const D = window.DOPA;
 const core = D.core;
 const THREE = window.THREE;
-const {MBTI,MBTI_CATCH,FOODS,CLOTHES,PRESENTS,SKIN_COLORS,HAIR_COLORS,CLOTHES_COLORS,EYE_COLORS,CHEEK_COLORS,
+const {MBTI,MBTI_CATCH,FOODS,CLOTHES,PRESENTS,OUTFITS,SKIN_COLORS,HAIR_COLORS,CLOTHES_COLORS,EYE_COLORS,CHEEK_COLORS,
        HAIR_STYLES,EYE_SHAPES,NOSE_SHAPES,MOUTH_SHAPES,buildCharacter,defaultSpec,
        $,$$,showScreen,toast} = D;
 const S = core.state;           // 同一参照を直接ミューテートする
@@ -1141,6 +1275,8 @@ function ensureIsland(){
    ========================================================= */
 let makerSpec = defaultSpec();
 let makerForced = false;
+let makerEditing = null;
+let dressRes = null;
 const BOTTOM_COLORS=[0x333333,0x2d8cff,0x8a5a2b,0xff5ea8,0xffffff,0x9b59f5];
 const BOTTOM_TYPES=["ズボン","スカート"];
 
@@ -1217,12 +1353,13 @@ function refreshMakerPreview(){
   if(!makerStage) makerStage=createStage($('#makerPreviewWrap'),{cy:1.7,cz:5.4,ty:1.2});
   makerStage.set(buildCharacter(THREE, Object.assign({},makerSpec)));
 }
-function openMaker(forced){
-  makerForced=forced;
-  makerSpec=defaultSpec();
-  makerSpec.mbti = MBTI[Math.floor(Math.random()*MBTI.length)];
+function openMaker(forced, editRes){
+  makerForced=forced; makerEditing=editRes||null;
+  if(makerEditing){ makerSpec=Object.assign(defaultSpec(), makerEditing.spec); }
+  else { makerSpec=defaultSpec(); makerSpec.mbti = MBTI[Math.floor(Math.random()*MBTI.length)]; }
   syncMakerUI();
-  $('#makerCancel').style.display = forced ? 'none':'block';
+  $('#makerConfirm').textContent = makerEditing ? '保存する' : '島に呼ぶ！';
+  $('#makerCancel').style.display = (forced && !makerEditing) ? 'none':'block';
   showScreen('makerScreen');
   if(!makerStage) makerStage=createStage($('#makerPreviewWrap'),{cy:1.7,cz:5.4,ty:1.2});
   makerStage.show(true);
@@ -1240,11 +1377,18 @@ function findFreeSpot(){
 function confirmMaker(){
   if(!makerSpec.name||!makerSpec.name.trim()) makerSpec.name="ドパガキ";
   if(!makerSpec.mbti) makerSpec.mbti="ENFP";
+  if(makerEditing){
+    makerEditing.spec=Object.assign({},makerSpec);
+    if(makerStage) makerStage.show(false);
+    core.rebuildIsland();
+    const ed=makerEditing; makerEditing=null;
+    toast(ed.spec.name+" を編集したよ"); autosave(); openList(); return;
+  }
   const res={
     spec:Object.assign({},makerSpec),
     happy:20, level:1, pos:findFreeSpot(),
     favFood:FOODS[Math.floor(Math.random()*FOODS.length)].id,
-    clothId:null, maxedOnce:false
+    outfitId:null, owned:[], maxedOnce:false
   };
   S.residents.push(res);
   if(makerStage) makerStage.show(false);
@@ -1303,7 +1447,7 @@ function answerDiag(pick){
 let careRes=null, careTab='food';
 function careCharGroup(res){
   const spec=Object.assign({},res.spec);
-  if(res.clothId!=null){ const c=CLOTHES.find(c=>c.id===res.clothId); if(c) spec.clothes=c.color; }
+  spec._outfit = res.outfitId||null;
   spec._level = res.level||1;
   return buildCharacter(THREE, spec);
 }
@@ -1372,13 +1516,14 @@ function buildCareGrid(){
       grid.innerHTML='<div style="grid-column:1/5;text-align:center;font-weight:800;color:#888;padding:20px;">2人目を島に呼ぶと<br>服が開放されるよ！</div>';
       return;
     }
-    CLOTHES.forEach(c=>{
+    OUTFITS.filter(o=>o.tier==='shop').forEach(o=>{
       const it=el('div','shop-item');
-      const owned = careRes.clothId===c.id;
-      it.innerHTML=`<div class="img"><span style="display:inline-block;width:30px;height:30px;border-radius:8px;border:2px solid #ccc;background:${swHTML(c.color)}"></span></div>
-        <div class="nm">${c.name}${owned?' ✓':''}</div>
-        <div class="pr"><span class="mini-coin"></span>${c.price}</div>`;
-      it.onclick=()=>giveCloth(c); grid.appendChild(it);
+      const owned=(careRes.owned||[]).includes(o.id);
+      const wearing=careRes.outfitId===o.id;
+      it.innerHTML=`<div class="img">${o.emo}</div>
+        <div class="nm">${o.name}${wearing?'(着用)':(owned?' ✓':'')}</div>
+        <div class="pr">${owned?'<span style="color:#34c759;font-weight:800">所持</span>':'<span class="mini-coin"></span>'+o.price}</div>`;
+      it.onclick=()=>buyOutfit(o); grid.appendChild(it);
     });
   }
   else { // プレゼント
@@ -1412,15 +1557,54 @@ function giveFood(f){
   if(up.leveled) onLevelUp(careRes, up);
   updateHappy(); core.refreshHUD(); autosave();
 }
-function giveCloth(c){
-  if(careRes.clothId===c.id){ toast("もう着ているよ"); return; }
-  if(S.gold<c.price){ toast("Gが足りないよ！"); return; }
-  S.gold-=c.price; careRes.clothId=c.id;
-  $('#careMsg').textContent="👕 "+reaction(careRes,'cloth');
+function buyOutfit(o){
+  careRes.owned=careRes.owned||[];
+  if(!careRes.owned.includes(o.id)){
+    if(S.gold<o.price){ toast("Gが足りないよ！"); return; }
+    S.gold-=o.price; careRes.owned.push(o.id); careRes.outfitId=o.id;
+    const up=addHappy(careRes,12);
+    $('#careMsg').textContent="👕 "+reaction(careRes,'cloth')+"（購入して着た！）";
+    if(up.leveled) onLevelUp(careRes, up);
+  } else {
+    careRes.outfitId=o.id; $('#careMsg').textContent="👕 きがえたよ！";
+  }
   careStage.set(careCharGroup(careRes));
-  const up=addHappy(careRes, 10);
-  if(up.leveled) onLevelUp(careRes, up);
   updateHappy(); core.refreshHUD(); buildCareGrid(); autosave();
+}
+/* 住人リスト・着せ替え */
+function openList(){
+  const sc=$('#listScroll'); sc.innerHTML='';
+  if(!S.residents.length){ sc.innerHTML='<p style="text-align:center;font-weight:800;color:#666;padding:30px;">まだ住人がいないよ</p>'; }
+  S.residents.forEach((r)=>{
+    const card=el('div','res-card'); const lv=r.level||1;
+    const fav=FOODS.find(f=>f.id===r.favFood); const favStr=fav?(fav.emo+fav.name):'？';
+    const ot=OUTFITS.find(o=>o.id===r.outfitId); const otStr=ot?ot.name:'きほん';
+    card.innerHTML=`<div class="rc-name">${r.spec.name} <span style="color:#caa12a">Lv.${lv}</span></div>
+      <div class="rc-sub">${r.spec.mbti||'?'}・${MBTI_CATCH[r.spec.mbti]||''}</div>
+      <div class="rc-stats">😊 幸せ ${Math.round(r.happy)}/100<br>🍽️ 好物 ${favStr}　👕 ${otStr}</div>
+      <div class="rc-btns">
+        <button class="btn btn-grn" data-a="zoom">クローズアップ</button>
+        <button class="btn btn-org" data-a="edit">編集</button>
+        <button class="btn btn-pink" data-a="dress">きせかえ</button>
+      </div>`;
+    card.querySelector('[data-a=zoom]').onclick=()=>{ core.focusResident(r); showScreen('islandScreen'); };
+    card.querySelector('[data-a=edit]').onclick=()=>openMaker(false,r);
+    card.querySelector('[data-a=dress]').onclick=()=>openDress(r);
+    sc.appendChild(card);
+  });
+  showScreen('listScreen');
+}
+function openDress(res){
+  dressRes=res; $('#dressName').textContent=res.spec.name+" のきせかえ";
+  const grid=$('#dressGrid'); grid.innerHTML='';
+  const list=[{id:null,name:'きほん',emo:'🧍'}].concat(OUTFITS.filter(o=>o.tier==='base'||(res.owned||[]).includes(o.id)));
+  list.forEach(o=>{
+    const it=el('div','shop-item'); const wearing=(res.outfitId||null)===(o.id||null);
+    it.innerHTML=`<div class="img">${o.emo}</div><div class="nm">${o.name}${wearing?' ●':''}</div>`;
+    it.onclick=()=>{ res.outfitId=o.id; core.rebuildIsland(); autosave(); openDress(res); };
+    grid.appendChild(it);
+  });
+  $('#dressModal').classList.add('show');
 }
 function givePresent(p){
   if(S.gold<p.price){ toast("Gが足りないよ！"); return; }
@@ -1518,7 +1702,12 @@ async function loadGame(){
     const obj=JSON.parse(raw);
     S.islandName=obj.islandName||""; S.islandYomi=obj.islandYomi||"しま";
     S.gold=obj.gold??1000; S.lastIncome=obj.lastIncome||Date.now();
-    S.residents.length=0; (obj.residents||[]).forEach(r=>{ if(r.level==null) r.level=1; S.residents.push(r); });
+    S.residents.length=0; (obj.residents||[]).forEach(r=>{
+      if(r.level==null) r.level=1;
+      if(r.outfitId===undefined) r.outfitId = (r.clothId? ('b'+String(r.clothId).replace('c','')) : null);
+      if(!Array.isArray(r.owned)) r.owned=[];
+      S.residents.push(r);
+    });
     S.buildings.length=0; (obj.buildings||[]).forEach(b=>S.buildings.push(b));
     // 解禁は住人数から再判定（保存フラグが無い/古いセーブも自己修復）
     S.clothUnlocked   = !!obj.clothUnlocked   || S.residents.length>=2;
@@ -1570,7 +1759,7 @@ function wire(){
   $('#quitNo').onclick=()=>$('#quitModal').classList.remove('show');
   $('#quitYes').onclick=async ()=>{ await saveGame(false); $('#quitModal').classList.remove('show'); location.reload(); };
   $('#makerConfirm').onclick=confirmMaker;
-  $('#makerCancel').onclick=()=>{ if(makerStage) makerStage.show(false); showScreen('islandScreen'); };
+  $('#makerCancel').onclick=()=>{ if(makerStage) makerStage.show(false); if(makerEditing){ makerEditing=null; openList(); } else showScreen('islandScreen'); };
   $('#mbtiDiagBtn').onclick=startDiag;
   $('#diagA').onclick=()=>answerDiag('a');
   $('#diagB').onclick=()=>answerDiag('b');
@@ -1578,6 +1767,10 @@ function wire(){
   $$('.care-tab').forEach(t=>t.onclick=()=>{ careTab=t.dataset.tab;
     $$('.care-tab').forEach(x=>x.classList.toggle('sel',x===t)); buildCareGrid(); });
   $('#houseBack').onclick=closeHouse;
+  $('#listBtn').onclick=openList;
+  $('#listBack').onclick=()=>showScreen('islandScreen');
+  $('#dressClose').onclick=()=>$('#dressModal').classList.remove('show');
+  $('#dressModal').onclick=(e)=>{ if(e.target.id==='dressModal') $('#dressModal').classList.remove('show'); };
 }
 
 core.openCare=openCare;
