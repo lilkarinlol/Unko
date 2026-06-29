@@ -593,7 +593,7 @@ let state = {
   islandName:"", islandYomi:"しま", gold:1000,
   residents:[],   // {spec, happy, pos:{x,z}, favFood, clothId}
   buildings:[],   // {type:'tree'|'house', pos:{x,z}}
-  clothUnlocked:false, presentUnlocked:false
+  clothUnlocked:false, presentUnlocked:false, lastIncome:0
 };
 const SAVE_KEY = "dopagaki_save_v1";
 
@@ -1043,7 +1043,7 @@ function updateBadges(){
 /* ---------- HUD ---------- */
 function refreshHUD(){
   $('#hudIslandName').textContent = state.islandName+'島';
-  $('#hudGold').textContent = state.gold;
+  $('#hudGold').textContent = Math.floor(state.gold);
   const oc=$('#optCloth'); if(oc && state.clothUnlocked) oc.classList.remove('locked');
   const op=$('#optPresent'); if(op && state.presentUnlocked) op.classList.remove('locked');
   const sn=$('#shopNew'); if(sn) sn.style.display=(state.clothUnlocked||state.presentUnlocked)?'block':'none';
@@ -1112,10 +1112,28 @@ function createStage(container, opt={}){
 
 /* ====== ステージ参照（遅延生成） ====== */
 let makerStage=null, careStage=null, houseStage=null, islandInited=false;
+/* ---------- 時間経過でお金が増える（詰み防止の自動収入） ---------- */
+const INCOME_CAP_SEC = 3600;                 // オフライン収入は最大1時間ぶん
+function incomeRate(){                         // G/秒：住人ごとに 0.4 + レベル*0.3
+  return S.residents.reduce((sum,r)=> sum + 0.4 + (r.level||1)*0.3, 0);
+}
+function tickIncome(){
+  const now=Date.now();
+  if(!S.lastIncome){ S.lastIncome=now; return 0; }
+  let dtSec=(now-S.lastIncome)/1000;
+  S.lastIncome=now;
+  if(dtSec<=0) return 0;
+  dtSec=Math.min(dtSec, INCOME_CAP_SEC);
+  const gain=incomeRate()*dtSec;
+  if(gain>0){ S.gold+=gain; core.refreshHUD(); }
+  return gain;
+}
+let _incomeTimer=null;
 function ensureIsland(){
   if(islandInited) return;
   core.initScene(); core.setupIslandInput(); core.setupCamStick();
   islandInited=true;
+  if(!_incomeTimer) _incomeTimer=setInterval(()=>{ tickIncome(); }, 4000);
 }
 
 /* =========================================================
@@ -1499,7 +1517,7 @@ async function loadGame(){
   try{
     const obj=JSON.parse(raw);
     S.islandName=obj.islandName||""; S.islandYomi=obj.islandYomi||"しま";
-    S.gold=obj.gold??1000;
+    S.gold=obj.gold??1000; S.lastIncome=obj.lastIncome||Date.now();
     S.residents.length=0; (obj.residents||[]).forEach(r=>{ if(r.level==null) r.level=1; S.residents.push(r); });
     S.buildings.length=0; (obj.buildings||[]).forEach(b=>S.buildings.push(b));
     // 解禁は住人数から再判定（保存フラグが無い/古いセーブも自己修復）
@@ -1518,13 +1536,14 @@ function wire(){
   $('#decideIslandBtn').onclick=()=>{
     const nm=$('#islandNameInput').value.trim();
     if(!nm){ toast("島の名前を入れてね"); return; }
-    S.islandName=nm; S.islandYomi=$('#islandYomi').value; S.gold=1000;
+    S.islandName=nm; S.islandYomi=$('#islandYomi').value; S.gold=1000; S.lastIncome=Date.now();
     ensureIsland(); core.rebuildIsland();
     openMaker(true);
   };
   $('#continueBtn').onclick=async ()=>{
     if(!await loadGame()){ toast("セーブデータが無いよ"); return; }
     ensureIsland(); core.rebuildIsland(); core.refreshHUD();
+    const og=tickIncome(); if(og>=1){ toast("🏝️ るすばん収入 +"+Math.floor(og)+"G"); saveGame(false); }
     showScreen('islandScreen');
   };
   $$('#toolbar .tool').forEach(t=>{
