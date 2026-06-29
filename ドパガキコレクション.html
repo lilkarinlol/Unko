@@ -389,223 +389,115 @@ function showScreen(id){ $$('.screen').forEach(s=>s.classList.remove('active'));
 function toast(msg){ const t=$('#toast'); t.textContent=msg; t.classList.add('show'); clearTimeout(t._t); t._t=setTimeout(()=>t.classList.remove('show'),1600); }
 
 /* =========================================================
-   3Dキャラ生成（Mii/Roblox風・約3頭身）
+   3Dキャラ生成（サンドボックス／Minecraft風・直方体プレイヤー）
+   髪・瞳・顔・服はパーツではなくテクスチャ（塗り）で表現する。
    spec = {skin,hair,hairStyle,clothes,bottomType,bottomColor,eyeShape,eyeColor,nose,mouth}
-   返り値: THREE.Group（足元が原点、上向き）
+   返り値: THREE.Group（足元が原点、上向き・前方=+Z）
    ========================================================= */
 function buildCharacter(THREE, spec){
   const g = new THREE.Group();
-  const mat = (c,rough=0.85)=>new THREE.MeshStandardMaterial({color:c,roughness:rough,metalness:0});
-  const skinMat = mat(spec.skin);
-  const hairMat = mat(spec.hair,0.7);
-  const clothMat= mat(spec.clothes);
-  const bottomMat=mat(spec.bottomColor);
-  const shoeMat = mat(0xffffff);
-  const eyeWhiteMat = new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.4});
-  const eyeMat = mat(spec.eyeColor,0.3);
-  const mouthMat= mat(0x9c3b3b,0.6);
-  const blushMat= new THREE.MeshStandardMaterial({color:0xff9aa6,roughness:1,transparent:true,opacity:0.55});
+  const hexc = c => (typeof c==='string') ? c : '#'+(((c>>>0)&0xffffff).toString(16).padStart(6,'0'));
+  const SKIN=hexc(spec.skin), HAIR=hexc(spec.hair), EYEC=hexc(spec.eyeColor),
+        CLO=hexc(spec.clothes), BOT=hexc(spec.bottomColor), MOUTH='#9c3b3b', SHOE='#f2f2f2';
+  const isSkirt = spec.bottomType==='スカート';
 
-  // ----- 体（胴） -----
-  const torso = new THREE.Mesh(new THREE.CylinderGeometry(0.42,0.5,0.7,18), clothMat);
-  torso.position.y = 0.95; torso.castShadow=true; g.add(torso);
-
-  // ----- ボトムス -----
-  if(spec.bottomType==="スカート"){
-    const skirt = new THREE.Mesh(new THREE.CylinderGeometry(0.5,0.72,0.42,20), bottomMat);
-    skirt.position.y = 0.5; skirt.castShadow=true; g.add(skirt);
-  } else {
-    const hipL = new THREE.Mesh(new THREE.CylinderGeometry(0.2,0.18,0.5,12), bottomMat);
-    const hipR = hipL.clone();
-    hipL.position.set(-0.18,0.42,0); hipR.position.set(0.18,0.42,0);
-    g.add(hipL,hipR);
+  // canvas→ピクセル風マテリアル（NearestFilterでドット感を出す）
+  function mk(draw,w,h){
+    const cv=document.createElement('canvas'); cv.width=w||16; cv.height=h||16;
+    const x=cv.getContext('2d'); x.imageSmoothingEnabled=false; draw(x,cv.width,cv.height);
+    const t=new THREE.CanvasTexture(cv); t.magFilter=THREE.NearestFilter; t.minFilter=THREE.NearestFilter;
+    return new THREE.MeshStandardMaterial({map:t, roughness:0.95, metalness:0});
   }
-  // ----- 脚 -----
-  const legGeo = new THREE.CylinderGeometry(0.15,0.14,0.42,12);
-  const legL = new THREE.Mesh(legGeo, skinMat); const legR = legL.clone();
-  legL.position.set(-0.18,0.22,0); legR.position.set(0.18,0.22,0);
-  g.add(legL,legR);
-  // ----- 靴 -----
-  const shoeGeo = new THREE.SphereGeometry(0.2,14,10); shoeGeo.scale(1,0.7,1.4);
-  const shoeL = new THREE.Mesh(shoeGeo, shoeMat); const shoeR = shoeL.clone();
-  shoeL.position.set(-0.18,0.05,0.06); shoeR.position.set(0.18,0.05,0.06);
-  shoeL.castShadow=shoeR.castShadow=true; g.add(shoeL,shoeR);
-  // ----- 腕 -----
-  const armGeo = new THREE.CylinderGeometry(0.12,0.11,0.5,12);
-  const armL = new THREE.Mesh(armGeo, clothMat); const armR = armL.clone();
-  armL.position.set(-0.52,0.98,0); armL.rotation.z = 0.18;
-  armR.position.set(0.52,0.98,0);  armR.rotation.z = -0.18;
-  g.add(armL,armR);
-  // 手
-  const handGeo = new THREE.SphereGeometry(0.13,12,10);
-  const handL = new THREE.Mesh(handGeo, skinMat); const handR = handL.clone();
-  handL.position.set(-0.6,0.72,0); handR.position.set(0.6,0.72,0);
-  g.add(handL,handR);
+  const solid=(c,r=0.95)=>new THREE.MeshStandardMaterial({color:new THREE.Color(c), roughness:r});
+  const F=(x,c,X,Y,W,H)=>{ x.fillStyle=c; x.fillRect(X,Y,W,H); };
 
-  // ----- 頭 -----
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.6,28,24), skinMat);
-  head.position.y = 1.75; head.castShadow=true; g.add(head);
-  const headY = 1.75, headR = 0.6;
+  // 髪型 → 塗りの被り具合（bangs:前髪の高さ, side:横の髪, back:後ろ髪, body:胴へ垂らす割合）
+  const HP=(()=>{ switch(spec.hairStyle){
+    case 'ロング':      return {bangs:11, side:true,  back:true,  body:0.80};
+    case 'ツインテール':return {bangs:11, side:true,  back:true,  body:0.55};
+    case 'ボブ':        return {bangs:13, side:true,  back:true,  body:0.18};
+    case 'ポニーテール':return {bangs:10, side:false, back:true,  body:0.50};
+    case 'アフロ':      return {bangs:15, side:true,  back:true,  body:0.0};
+    case 'お団子':      return {bangs:10, side:false, back:true,  body:0.0};
+    case '坊主':        return {bangs:0,  side:false, back:false, body:0.0, none:true};
+    default:            return {bangs:9,  side:false, back:true,  body:0.0}; // ショート
+  }})();
 
-  // 顔パーツは頭のローカルに付ける用グループ（頭の前方=+Z）
-  const face = new THREE.Group(); face.position.y = headY; g.add(face);
-
-  // ----- 目 -----
-  function makeEye(side){
-    const eg = new THREE.Group();
-    const white = new THREE.Mesh(new THREE.SphereGeometry(0.16,16,14), eyeWhiteMat);
-    white.scale.set(1,1.15,0.6);
-    const iris = new THREE.Mesh(new THREE.SphereGeometry(0.1,16,14), eyeMat);
-    iris.position.z = 0.08; iris.scale.set(1,1,0.6);
-    const hi = new THREE.Mesh(new THREE.SphereGeometry(0.035,8,8), new THREE.MeshStandardMaterial({color:0xffffff,roughness:0.2}));
-    hi.position.set(0.04,0.05,0.14);
-    eg.add(white,iris,hi);
-    // 目の形
-    const sh = spec.eyeShape;
-    if(sh==="つり目"){ eg.rotation.z = side*0.32; }
-    else if(sh==="たれ目"){ eg.rotation.z = -side*0.32; }
-    else if(sh==="ジト目"){ eg.scale.y = 0.55; white.position.y = -0.02; }
-    return eg;
-  }
-  const eyeL = makeEye(-1), eyeR = makeEye(1);
-  eyeL.position.set(-0.22,0.08,0.5); eyeR.position.set(0.22,0.08,0.5);
-  // 内向きに少し
-  eyeL.rotation.y = 0.15; eyeR.rotation.y = -0.15;
-  face.add(eyeL,eyeR);
-
-  // ----- 眉 -----
-  const browGeo = new THREE.BoxGeometry(0.18,0.035,0.05);
-  const browMat = mat(spec.hair,0.7);
-  const browL = new THREE.Mesh(browGeo,browMat), browR = browL.clone();
-  browL.position.set(-0.22,0.26,0.55); browR.position.set(0.22,0.26,0.55);
-  face.add(browL,browR);
-
-  // ----- 鼻 -----
-  let noseGeo;
-  if(spec.nose==="小さい") noseGeo = new THREE.SphereGeometry(0.05,10,8);
-  else if(spec.nose==="つん"){ noseGeo = new THREE.ConeGeometry(0.06,0.12,10); }
-  else noseGeo = new THREE.SphereGeometry(0.07,12,10);
-  const nose = new THREE.Mesh(noseGeo, mat(spec.skin,0.7));
-  if(spec.nose==="つん") nose.rotation.x = Math.PI/2;
-  nose.position.set(0,-0.02,0.6); face.add(nose);
-
-  // ----- 口 -----
-  let mouth;
-  if(spec.mouth==="にっこり"){
-    mouth = new THREE.Mesh(new THREE.TorusGeometry(0.12,0.025,8,16,Math.PI), mouthMat);
-    mouth.rotation.z = Math.PI; // 下に膨らむ＝笑顔
-  } else if(spec.mouth==="への字"){
-    mouth = new THREE.Mesh(new THREE.TorusGeometry(0.12,0.025,8,16,Math.PI), mouthMat);
-    // 上に膨らむ＝への字（rotationなしで上凸）
-  } else { // 小さい口
-    mouth = new THREE.Mesh(new THREE.SphereGeometry(0.05,10,8), mouthMat);
-    mouth.scale.set(1.6,1,0.6);
-  }
-  mouth.position.set(0,-0.22,0.57); face.add(mouth);
-
-  // ----- ほっぺ（チーク） -----
-  const cheekGeo = new THREE.CircleGeometry(0.1,16);
-  const cheekL = new THREE.Mesh(cheekGeo,blushMat), cheekR = cheekL.clone();
-  cheekL.position.set(-0.34,-0.1,0.5); cheekR.position.set(0.34,-0.1,0.5);
-  face.add(cheekL,cheekR);
-
-  // ----- 髪（頭のグループに付ける。顔の前面は絶対に覆わない） -----
-  const hairGrp = new THREE.Group(); hairGrp.position.y = headY; g.add(hairGrp);
-  buildHair(THREE, hairGrp, spec.hairStyle, hairMat, headR);
-
-  // ----- 王冠（Lv5以上のごほうび。頭頂の上＝顔は隠さない） -----
-  if(spec._level && spec._level>=5){
-    const goldMat=new THREE.MeshStandardMaterial({color:0xffd60a,metalness:0.35,roughness:0.35});
-    const crown=new THREE.Group();
-    const band=new THREE.Mesh(new THREE.CylinderGeometry(0.30,0.32,0.14,16,1,true), goldMat);
-    band.castShadow=true; crown.add(band);
-    const pts=6;
-    for(let i=0;i<pts;i++){
-      const a=(i/pts)*Math.PI*2;
-      const spike=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.16,8), goldMat);
-      spike.position.set(Math.cos(a)*0.31,0.13,Math.sin(a)*0.31); spike.castShadow=true; crown.add(spike);
+  /* ===== 頭（直方体・各面を塗り分け） 32x32 ===== */
+  function paintFront(x,w,h){
+    F(x,SKIN,0,0,w,h);
+    if(HP.none) F(x,HAIR,0,0,w,4); else F(x,HAIR,0,0,w,HP.bangs);                          // 前髪
+    if(HP.side){ F(x,HAIR,0,0,4,Math.floor(h*0.70)); F(x,HAIR,w-4,0,4,Math.floor(h*0.70)); } // サイド
+    const eyeY=14, eyeW=6, eyeH=7, lx=6, rx=w-6-eyeW, dark=HAIR;
+    function eye(ex,outer){
+      F(x,'#ffffff',ex,eyeY,eyeW,eyeH);
+      let iy=eyeY+1, ih=eyeH-2;
+      if(spec.eyeShape==='ジト目'){ F(x,SKIN,ex,eyeY,eyeW,2); F(x,SKIN,ex,eyeY+eyeH-2,eyeW,2); iy=eyeY+2; ih=2; }
+      else if(spec.eyeShape==='つり目'){ iy=eyeY+1; ih=eyeH-3; }
+      else if(spec.eyeShape==='たれ目'){ iy=eyeY+2; ih=eyeH-3; }
+      F(x,EYEC,ex+1,iy,eyeW-2,ih);                                   // 虹彩
+      F(x,'#ffffff',ex+(outer<0?eyeW-2:1),iy,1,1);                   // ハイライト
+      F(x,dark,ex,eyeY-1,eyeW,1);                                    // 上まつげ
+      if(spec.eyeShape==='つり目') F(x,dark,ex+(outer<0?0:eyeW-1),eyeY-2,1,2);    // 外側を上げる
+      if(spec.eyeShape==='たれ目') F(x,dark,ex+(outer<0?0:eyeW-1),eyeY+eyeH-1,1,2); // 外側を下げる
     }
-    crown.position.y = headY + headR*0.85;
-    g.add(crown);
+    eye(lx,-1); eye(rx,1);
+    const cx=Math.floor(w/2);
+    if(spec.nose!=='小さい') F(x,'rgba(90,50,30,0.30)',cx-1,21,2, spec.nose==='つん'?1:2); else F(x,'rgba(90,50,30,0.25)',cx,22,1,1);
+    const my=26;                                                     // 口
+    if(spec.mouth==='にっこり'){ F(x,MOUTH,cx-3,my,6,1); F(x,MOUTH,cx-4,my-1,1,1); F(x,MOUTH,cx+3,my-1,1,1); }
+    else if(spec.mouth==='への字'){ F(x,MOUTH,cx-3,my,6,1); F(x,MOUTH,cx-4,my+1,1,1); F(x,MOUTH,cx+3,my+1,1,1); }
+    else { F(x,MOUTH,cx-1,my,2,2); }
+    F(x,'rgba(255,150,170,0.55)',4,23,3,2); F(x,'rgba(255,150,170,0.55)',w-7,23,3,2);       // ほっぺ
+  }
+  function paintSide(x,w,h){
+    F(x,SKIN,0,0,w,h);
+    if(HP.none){ F(x,HAIR,0,0,w,3); return; }
+    F(x,HAIR,0,0,w, HP.side?Math.floor(h*0.74):Math.floor(h*0.32));
+  }
+  const paintTop=(x,w,h)=>F(x,HAIR,0,0,w,h);
+  const paintBottom=(x,w,h)=>F(x,SKIN,0,0,w,h);
+  function paintBack(x,w,h){ if(HP.back){ F(x,HAIR,0,0,w,h); } else { F(x,SKIN,0,0,w,h); F(x,HAIR,0,0,w,3); } }
+
+  const headMats=[ mk(paintSide,32,32), mk(paintSide,32,32), mk(paintTop,32,32),
+                   mk(paintBottom,32,32), mk(paintFront,32,32), mk(paintBack,32,32) ];
+  const head=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.6,0.6), headMats);
+  head.position.y=2.1; head.castShadow=true; g.add(head);
+
+  /* ===== 胴（長い髪は背面・側面に塗りで垂らす） ===== */
+  const drape=(base,frac)=>mk((x,w,h)=>{ F(x,base,0,0,w,h); if(frac>0) F(x,HAIR,0,0,w,Math.floor(h*frac)); },16,24);
+  const sideFrac = HP.side? HP.body*0.7 : 0;
+  const bodyMats=[ drape(CLO,sideFrac), drape(CLO,sideFrac), solid(CLO), solid(CLO),
+                   solid(CLO), drape(CLO,HP.body) ];
+  const body=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.9,0.3), bodyMats);
+  body.position.y=1.35; body.castShadow=true; g.add(body);
+
+  /* ===== 腕（袖＝服色＋手＝肌色） ===== */
+  const armFace=()=>mk((x,w,h)=>{ F(x,CLO,0,0,w,h); F(x,SKIN,0,Math.floor(h*0.66),w,Math.ceil(h*0.34)); },8,24);
+  function arm(sx){
+    const m=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.9,0.3),
+      [armFace(),armFace(),solid(CLO),solid(SKIN),armFace(),armFace()]);
+    m.position.set(sx,1.35,0); m.castShadow=true; g.add(m);
+  }
+  arm(-0.45); arm(0.45);
+
+  /* ===== 脚（ズボン/スカートで素肌切替・靴は足先） ===== */
+  const legTop = isSkirt? SKIN : BOT;
+  const legFace=()=>mk((x,w,h)=>{ F(x,legTop,0,0,w,h); F(x,SHOE,0,Math.floor(h*0.82),w,Math.ceil(h*0.18)); },8,24);
+  function leg(sx){
+    const m=new THREE.Mesh(new THREE.BoxGeometry(0.3,0.9,0.3),
+      [legFace(),legFace(),solid(legTop),solid(SHOE),legFace(),legFace()]);
+    m.position.set(sx,0.45,0); m.castShadow=true; g.add(m);
+  }
+  leg(-0.15); leg(0.15);
+
+  if(isSkirt){
+    const skirt=new THREE.Mesh(new THREE.BoxGeometry(0.7,0.4,0.42), solid(BOT));
+    skirt.position.y=0.85; skirt.castShadow=true; g.add(skirt);
   }
 
   g.userData.spec = spec;
   return g;
-}
-
-/* 髪型ビルダー
-   頭は中心(0,0,0)・半径R（このgrpはhead中心に置かれている）。顔は+Z。
-   絶対ルール：目(z≈0.5,y≈0.08)・眉(y≈0.26)・口より下に髪を出さない。
-   前髪は y>=0.18 の前頭部だけを薄く覆う。 */
-function buildHair(THREE, grp, style, mat, R){
-  // 頭頂キャップ：全周シェル。天頂(phi=0)から phiLen まで。
-  // phiLen=π*0.42 だと赤道(π/2)より上で止まる→目・眉(顔正面の下方)を覆わない。左右対称。
-  const capShell = (phiLen=Math.PI*0.40, scale=1.07, yOff=0)=>{
-    const geo=new THREE.SphereGeometry(R*scale,30,20,0,Math.PI*2,0,phiLen);
-    const m=new THREE.Mesh(geo,mat); m.position.y=yOff; m.castShadow=true; grp.add(m); return m;
-  };
-  // 後頭部のみ下へ伸ばす毛（-Z側の半円柱。前面+Zには出ない）
-  const backFall = (len, rad, yCenter)=>{
-    const geo=new THREE.CylinderGeometry(rad,rad*0.92,len,20,1,true,Math.PI/2,Math.PI);
-    const m=new THREE.Mesh(geo,mat); m.position.set(0,yCenter,-0.05); m.castShadow=true; grp.add(m); return m;
-  };
-  // 前髪：中央にちょこんと毛束を足すだけ（生え際の自然さ用）。目には絶対かけない。
-  const frontBangs = ()=>{
-    const tuft=new THREE.Mesh(new THREE.SphereGeometry(0.18,16,12),mat);
-    tuft.scale.set(1.2,0.6,0.7); tuft.position.set(0,R*0.80,R*0.46); tuft.castShadow=true; grp.add(tuft);
-    return tuft;
-  };
-  // サイドの髪
-  const sideLock = (s,len=0.5,yC=-0.05)=>{
-    const geo=new THREE.CylinderGeometry(0.12,0.10,len,12);
-    const m=new THREE.Mesh(geo,mat); m.position.set(s*R*0.97,yC,-0.1); m.castShadow=true; grp.add(m); return m;
-  };
-
-  switch(style){
-    case "ショート":
-      capShell(); frontBangs(); break;
-    case "ボブ":
-      capShell(Math.PI*0.5); frontBangs();
-      sideLock(-1,0.55,-0.08); sideLock(1,0.55,-0.08);
-      backFall(0.5, R*0.96, -0.22);
-      break;
-    case "ロング":
-      capShell(Math.PI*0.5); frontBangs();
-      backFall(1.3, R*0.97, -0.55);
-      sideLock(-1,0.8,-0.2); sideLock(1,0.8,-0.2);
-      break;
-    case "ポニーテール":
-      capShell(); frontBangs();
-      { const tie=new THREE.Mesh(new THREE.SphereGeometry(0.13,12,10),mat);
-        tie.position.set(0,0.28,-R*0.98); grp.add(tie);
-        const tail=new THREE.Mesh(new THREE.CylinderGeometry(0.15,0.05,1.0,12),mat);
-        tail.position.set(0,-0.1,-R-0.2); tail.rotation.x=-0.5; tail.castShadow=true; grp.add(tail); }
-      break;
-    case "ツインテール":
-      capShell(); frontBangs();
-      [-1,1].forEach(s=>{
-        const tie=new THREE.Mesh(new THREE.SphereGeometry(0.11,10,8),mat);
-        tie.position.set(s*R*0.9,0.05,-0.15); grp.add(tie);
-        const tail=new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.04,0.95,12),mat);
-        tail.position.set(s*(R+0.18),-0.35,-0.12); tail.rotation.z=s*0.25; tail.castShadow=true; grp.add(tail);
-      });
-      break;
-    case "アフロ":
-      { const geo=new THREE.SphereGeometry(R*1.45,20,16,0,Math.PI*2,0,Math.PI*0.62);
-        const m=new THREE.Mesh(geo,mat); m.position.y=0.08; m.castShadow=true; grp.add(m); }
-      break;
-    case "お団子":
-      capShell(); frontBangs();
-      { const bun=new THREE.Mesh(new THREE.SphereGeometry(0.24,16,14),mat);
-        bun.position.set(0,R*0.95,-0.02); bun.castShadow=true; grp.add(bun);
-        const tie=new THREE.Mesh(new THREE.TorusGeometry(0.16,0.04,8,16),mat);
-        tie.position.set(0,R*0.72,-0.02); tie.rotation.x=Math.PI/2; grp.add(tie); }
-      break;
-    case "坊主":
-      // 頭にぴったり、薄く、毛束なし。少し広めに覆う。
-      capShell(Math.PI*0.46, 1.03, 0.0); break;
-    default: capShell(); frontBangs();
-  }
 }
 
 /* デフォルトspec */
@@ -786,7 +678,7 @@ function rebuildIsland(){
     islandGroup.add(m); residentMeshes.push(m);
     // 頭上のレベルバッジ
     const badge=document.createElement('div'); badge.className='lvbadge';
-    const lv=r.level||1; badge.textContent=(lv>=5?'👑Lv.'+lv:'Lv.'+lv);
+    const lv=r.level||1; badge.textContent=(lv>=5?'★Lv.'+lv:'Lv.'+lv);
     bubbleLayer.appendChild(badge); m.userData.badgeEl=badge;
   });
   refreshHUD();
@@ -1067,7 +959,7 @@ function updateBadges(){
   const v=new THREE.Vector3();
   for(const m of residentMeshes){
     const el=m.userData.badgeEl; if(!el) continue;
-    v.copy(m.position); v.y += 2.05; v.project(camera);
+    v.copy(m.position); v.y += 2.25; v.project(camera);
     el.style.left=((v.x*0.5+0.5)*window.innerWidth)+'px';
     el.style.top =((-v.y*0.5+0.5)*window.innerHeight)+'px';
     el.style.display=(v.z<1)?'block':'none';
@@ -1223,7 +1115,7 @@ function syncMakerUI(){
   reselectChip('#mouthShape',MOUTH_SHAPES,makerSpec.mouth);
 }
 function refreshMakerPreview(){
-  if(!makerStage) makerStage=createStage($('#makerPreviewWrap'),{cy:1.75,cz:4.8,ty:1.4});
+  if(!makerStage) makerStage=createStage($('#makerPreviewWrap'),{cy:1.7,cz:5.4,ty:1.2});
   makerStage.set(buildCharacter(THREE, Object.assign({},makerSpec)));
 }
 function openMaker(forced){
@@ -1233,7 +1125,7 @@ function openMaker(forced){
   syncMakerUI();
   $('#makerCancel').style.display = forced ? 'none':'block';
   showScreen('makerScreen');
-  if(!makerStage) makerStage=createStage($('#makerPreviewWrap'),{cy:1.75,cz:4.8,ty:1.4});
+  if(!makerStage) makerStage=createStage($('#makerPreviewWrap'),{cy:1.7,cz:5.4,ty:1.2});
   makerStage.show(true);
   refreshMakerPreview();
 }
@@ -1359,7 +1251,7 @@ function openCare(res){
   $$('.care-tab').forEach(t=>t.classList.toggle('sel',t.dataset.tab==='food'));
   buildCareGrid();
   showScreen('careScreen');
-  if(!careStage) careStage=createStage($('#carePreviewWrap'),{cy:1.7,cz:4.6,ty:1.4});
+  if(!careStage) careStage=createStage($('#carePreviewWrap'),{cy:1.65,cz:5.2,ty:1.2});
   careStage.show(true); careStage.set(careCharGroup(res));
 }
 function updateHappy(){
@@ -1443,7 +1335,7 @@ function buildHouseScene(stage){
 }
 let houseBuilt=false;
 function openHouse(){
-  if(!houseStage){ houseStage=createStage($('#houseInner'),{cx:0,cy:3.4,cz:7,ty:1.2,autoRot:false}); }
+  if(!houseStage){ houseStage=createStage($('#houseInner'),{cx:0,cy:3.4,cz:7.5,ty:1.3,autoRot:false}); }
   if(!houseBuilt){ buildHouseScene(houseStage); houseBuilt=true; }
   if(houseStage._people){ houseStage._people.forEach(p=>houseStage.scene.remove(p)); }
   houseStage._people=[];
