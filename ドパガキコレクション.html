@@ -703,7 +703,10 @@ function clearMeshes(arr){ arr.forEach(m=>islandGroup.remove(m)); arr.length=0; 
 function rebuildIsland(){
   clearMeshes(residentMeshes); clearMeshes(buildingMeshes);
   state.buildings.forEach(b=>{
-    const m = (b.type==='tree') ? makeTree() : makeHouse();
+    let m;
+    if(b.type==='tree') m=makeTree();
+    else if(b.type==='shopFood'||b.type==='shopCloth') m=makeShop(b.type);
+    else m=makeHouse();
     m.position.set(b.pos.x,0.5,b.pos.z); m.userData.building=b;
     islandGroup.add(m); buildingMeshes.push(m);
   });
@@ -740,6 +743,56 @@ function makeHouse(){
     new THREE.MeshStandardMaterial({color:0x7a4a2b}));
   door.position.set(0,0.3,0.72);
   g.add(body,roof,door); g.userData.kind='house'; return g;
+}
+/* お店の看板/テント用テクスチャ（CanvasTexture・r128対応） */
+function stripeTexture(c1,c2){
+  const cv=document.createElement('canvas'); cv.width=64; cv.height=32;
+  const x=cv.getContext('2d');
+  for(let i=0;i<8;i++){ x.fillStyle=(i%2?c1:c2); x.fillRect(i*8,0,8,32); }
+  const tex=new THREE.CanvasTexture(cv); tex.anisotropy=2; return tex;
+}
+function signTexture(emo){
+  const cv=document.createElement('canvas'); cv.width=128; cv.height=128;
+  const x=cv.getContext('2d');
+  x.fillStyle='#fffdf6'; x.fillRect(0,0,128,128);
+  x.font='84px serif'; x.textAlign='center'; x.textBaseline='middle';
+  x.fillText(emo,64,70);
+  return new THREE.CanvasTexture(cv);
+}
+/* 食べ物屋(shopFood)/服屋(shopCloth)の3Dモデル。家とは別シルエット。
+   原点(y=0)が接地面。rebuildIsland で group.y=0.5 に置かれて島に乗る。 */
+function makeShop(kind){
+  const g=new THREE.Group();
+  const food = kind==='shopFood';
+  const accent  = food?0xff7a18:0xff5ea8;          // 屋根色（食=オレンジ/服=ピンク）
+  const stripe  = food?'#e8412f':'#9b59f5';        // テントの縞色
+  // 本体（家より低く横長＝お店らしいシルエット）
+  const body=new THREE.Mesh(new THREE.BoxGeometry(1.5,0.9,1.2),
+    new THREE.MeshStandardMaterial({color:0xfdf3e7}));
+  body.position.y=0.45; body.castShadow=true; g.add(body);
+  // 平らな屋根（アクセント色）
+  const roof=new THREE.Mesh(new THREE.BoxGeometry(1.62,0.16,1.32),
+    new THREE.MeshStandardMaterial({color:accent}));
+  roof.position.y=0.98; roof.castShadow=true; g.add(roof);
+  // 売り場の窓（前面+Z）とカウンター
+  const win=new THREE.Mesh(new THREE.BoxGeometry(1.1,0.45,0.06),
+    new THREE.MeshStandardMaterial({color:0x5a3b22}));
+  win.position.set(0,0.5,0.61); g.add(win);
+  const counter=new THREE.Mesh(new THREE.BoxGeometry(1.2,0.1,0.34),
+    new THREE.MeshStandardMaterial({color:0xd9b38c}));
+  counter.position.set(0,0.32,0.72); counter.castShadow=true; g.add(counter);
+  // 縞模様のテント（前面にせり出す）
+  const awn=new THREE.Mesh(new THREE.BoxGeometry(1.6,0.07,0.55),
+    new THREE.MeshStandardMaterial({map:stripeTexture(stripe,'#ffffff'),roughness:0.9}));
+  awn.position.set(0,0.86,0.62); awn.rotation.x=-0.34; awn.castShadow=true; g.add(awn);
+  // 看板（ポール＋絵文字ボード）
+  const post=new THREE.Mesh(new THREE.CylinderGeometry(0.045,0.045,0.5,8),
+    new THREE.MeshStandardMaterial({color:0x7a5a3a}));
+  post.position.set(0.55,1.25,0); g.add(post);
+  const board=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.6,0.07),
+    new THREE.MeshStandardMaterial({map:signTexture(food?'🍔':'👕')}));
+  board.position.set(0.55,1.62,0); board.castShadow=true; g.add(board);
+  g.userData.kind=kind; return g;
 }
 
 /* ---------- 入力処理（タップ/ドラッグ） ---------- */
@@ -816,7 +869,12 @@ function handleTap(e){
     const r=pickResident(e);
     if(r){ window.DOPA.core.openCare(r.mesh.userData.resident); return; }
     const b=pickBuilding(e);
-    if(b && b.userData.building.type==='house'){ window.DOPA.core.openHouse(); return; }
+    if(b){
+      const t=b.userData.building.type;
+      if(t==='house'){ window.DOPA.core.openHouse(); return; }
+      if(t==='shopFood'){ toast("🍔 おいしそうな匂いがする…"); return; }
+      if(t==='shopCloth'){ toast("👕 すてきな服が並んでいる！"); return; }
+    }
     return;
   }
   if(curMode==='tree'||curMode==='house'||curMode==='shopFood'||curMode==='shopCloth'){
@@ -825,8 +883,8 @@ function handleTap(e){
     if(tooClose(p.x,p.z)){ toast("近すぎるよ。別の場所に！"); return; }
     if(curMode==='tree'){ state.buildings.push({type:'tree',pos:{x:p.x,z:p.z}}); }
     else if(curMode==='house'){ state.buildings.push({type:'house',pos:{x:p.x,z:p.z}}); }
-    else if(curMode==='shopFood'){ state.buildings.push({type:'house',pos:{x:p.x,z:p.z}}); toast("食べ物屋を置いた！"); }
-    else if(curMode==='shopCloth'){ state.buildings.push({type:'house',pos:{x:p.x,z:p.z}}); toast("服屋を置いた！"); }
+    else if(curMode==='shopFood'){ state.buildings.push({type:'shopFood',pos:{x:p.x,z:p.z}}); toast("食べ物屋を置いた！"); }
+    else if(curMode==='shopCloth'){ state.buildings.push({type:'shopCloth',pos:{x:p.x,z:p.z}}); toast("服屋を置いた！"); }
     hideHint(); setMode('move');
     rebuildIsland();
   }
