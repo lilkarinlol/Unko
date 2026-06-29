@@ -177,6 +177,14 @@
   .mark{position:absolute;transform:translate(-50%,-100%);font-size:26px;pointer-events:none;z-index:20;
     animation:bob .6s ease-in-out infinite;}
   @keyframes bob{0%,100%{transform:translate(-50%,-100%)}50%{transform:translate(-50%,-130%)}}
+  /* 住人の頭上に出すレベルバッジ */
+  .lvbadge{position:absolute;transform:translate(-50%,-50%);background:linear-gradient(180deg,#ffd86b,#ffb300);
+    color:#5a3b00;font-weight:900;font-size:12px;padding:2px 9px;border-radius:11px;border:2px solid #fff;
+    box-shadow:0 2px 5px rgba(0,0,0,.25);pointer-events:none;z-index:18;white-space:nowrap;}
+  /* レベルアップ演出 */
+  #lvBurst{position:absolute;inset:0;display:none;align-items:center;justify-content:center;z-index:56;pointer-events:none;}
+  #lvBurst .b{background:linear-gradient(180deg,#ffd86b,#ff9a3c);color:#5a3b00;font-weight:900;font-size:24px;
+    padding:18px 30px;border-radius:22px;box-shadow:var(--shadow);animation:pop .6s ease;text-align:center;line-height:1.4;}
 </style>
 </head>
 <body>
@@ -298,6 +306,7 @@
   <!-- 共通オーバーレイ -->
   <div id="toast"></div>
   <div id="saveBurst"><div class="b">💾 保存しました！</div></div>
+  <div id="lvBurst"><div class="b">🎉 レベルアップ！</div></div>
   <div class="modal" id="quitModal"><div class="modal-card">
     <p>ゲームを終了しますか？<br>（セーブ済みの内容は残ります）</p>
     <div class="row"><button class="btn btn-gray" id="quitNo">いいえ</button>
@@ -504,6 +513,22 @@ function buildCharacter(THREE, spec){
   const hairGrp = new THREE.Group(); hairGrp.position.y = headY; g.add(hairGrp);
   buildHair(THREE, hairGrp, spec.hairStyle, hairMat, headR);
 
+  // ----- 王冠（Lv5以上のごほうび。頭頂の上＝顔は隠さない） -----
+  if(spec._level && spec._level>=5){
+    const goldMat=new THREE.MeshStandardMaterial({color:0xffd60a,metalness:0.35,roughness:0.35});
+    const crown=new THREE.Group();
+    const band=new THREE.Mesh(new THREE.CylinderGeometry(0.30,0.32,0.14,16,1,true), goldMat);
+    band.castShadow=true; crown.add(band);
+    const pts=6;
+    for(let i=0;i<pts;i++){
+      const a=(i/pts)*Math.PI*2;
+      const spike=new THREE.Mesh(new THREE.ConeGeometry(0.05,0.16,8), goldMat);
+      spike.position.set(Math.cos(a)*0.31,0.13,Math.sin(a)*0.31); spike.castShadow=true; crown.add(spike);
+    }
+    crown.position.y = headY + headR*0.85;
+    g.add(crown);
+  }
+
   g.userData.spec = spec;
   return g;
 }
@@ -696,6 +721,7 @@ function animate(){
   updateWander(dt);
   updateConversations(dt);
   updateBubblePositions();
+  updateBadges();
   renderer.render(scene,camera);
 }
 
@@ -738,7 +764,7 @@ function updateWander(dt){
 }
 
 /* ---------- 島へ住人/建物を反映 ---------- */
-function clearMeshes(arr){ arr.forEach(m=>islandGroup.remove(m)); arr.length=0; }
+function clearMeshes(arr){ arr.forEach(m=>{ islandGroup.remove(m); if(m.userData.badgeEl){ m.userData.badgeEl.remove(); m.userData.badgeEl=null; } }); arr.length=0; }
 function rebuildIsland(){
   clearMeshes(residentMeshes); clearMeshes(buildingMeshes);
   state.buildings.forEach(b=>{
@@ -752,11 +778,16 @@ function rebuildIsland(){
   state.residents.forEach((r,i)=>{
     const spec = Object.assign({}, r.spec);
     if(r.clothId!=null){ const c=CLOTHES.find(c=>c.id===r.clothId); if(c) spec.clothes=c.color; }
+    spec._level = r.level||1;
     const m = buildCharacter(THREE, spec);
     m.scale.set(0.85,0.85,0.85);
     m.position.set(r.pos.x,0.5,r.pos.z);
     m.userData.resident=r; m.userData.index=i;
     islandGroup.add(m); residentMeshes.push(m);
+    // 頭上のレベルバッジ
+    const badge=document.createElement('div'); badge.className='lvbadge';
+    const lv=r.level||1; badge.textContent=(lv>=5?'👑Lv.'+lv:'Lv.'+lv);
+    bubbleLayer.appendChild(badge); m.userData.badgeEl=badge;
   });
   refreshHUD();
 }
@@ -1030,6 +1061,18 @@ function updateBubblePositions(){
     b.el.style.display=(v.z<1)?'block':'none';
   });
 }
+/* 頭上レベルバッジの追従 */
+function updateBadges(){
+  if(!residentMeshes.length) return;
+  const v=new THREE.Vector3();
+  for(const m of residentMeshes){
+    const el=m.userData.badgeEl; if(!el) continue;
+    v.copy(m.position); v.y += 2.05; v.project(camera);
+    el.style.left=((v.x*0.5+0.5)*window.innerWidth)+'px';
+    el.style.top =((-v.y*0.5+0.5)*window.innerHeight)+'px';
+    el.style.display=(v.z<1)?'block':'none';
+  }
+}
 
 /* ---------- HUD ---------- */
 function refreshHUD(){
@@ -1208,7 +1251,7 @@ function confirmMaker(){
   if(!makerSpec.mbti) makerSpec.mbti="ENFP";
   const res={
     spec:Object.assign({},makerSpec),
-    happy:20, pos:findFreeSpot(),
+    happy:20, level:1, pos:findFreeSpot(),
     favFood:FOODS[Math.floor(Math.random()*FOODS.length)].id,
     clothId:null, maxedOnce:false
   };
@@ -1269,13 +1312,50 @@ let careRes=null, careTab='food';
 function careCharGroup(res){
   const spec=Object.assign({},res.spec);
   if(res.clothId!=null){ const c=CLOTHES.find(c=>c.id===res.clothId); if(c) spec.clothes=c.color; }
+  spec._level = res.level||1;
   return buildCharacter(THREE, spec);
+}
+/* ---------- レベル ---------- */
+function levelTitle(lv){
+  if(lv>=10) return 'でんせつのドパガキ';
+  if(lv>=7)  return '島のカリスマ';
+  if(lv>=5)  return '島のスター';
+  if(lv>=3)  return 'しんゆう';
+  if(lv>=2)  return 'なかよし';
+  return 'かけだし';
+}
+// 幸せを加算。100到達ごとにレベルアップ（超過分は繰り越し）。{leveled,reward,newLevel} を返す
+function addHappy(res, amount){
+  res.level = res.level||1;
+  res.happy = (res.happy||0) + amount;
+  let leveled=0, reward=0;
+  while(res.happy>=100){
+    res.happy-=100; res.level++; leveled++;
+    reward += 100*res.level;   // レベルが上がるほどお祝い金UP
+  }
+  if(leveled){ S.gold += reward; }
+  return {leveled, reward, newLevel:res.level};
+}
+function refreshCareTitle(res){
+  const lv=res.level||1;
+  $('#careName').textContent = `${res.spec.name} Lv.${lv}`;
+}
+function lvBurst(text){
+  const b=$('#lvBurst'); b.querySelector('.b').innerHTML=text;
+  b.style.display='flex'; setTimeout(()=>b.style.display='none',1100);
+}
+function onLevelUp(res, up){
+  const t=levelTitle(up.newLevel);
+  lvBurst(`🎉 Lv.${up.newLevel} にレベルアップ！<br>「${t}」 ＋${up.reward}G`);
+  $('#careMsg').textContent = `🎉 Lv.${up.newLevel}「${t}」になった！ お祝い金 ＋${up.reward}G`;
+  refreshCareTitle(res);
+  if(careStage) careStage.set(careCharGroup(res));  // 王冠などの見た目を即反映
 }
 function el(tag,cls){ const d=document.createElement(tag); if(cls) d.className=cls; return d; }
 function openCare(res){
-  careRes=res; careTab='food';
-  $('#careName').textContent=res.spec.name+"（"+(res.spec.mbti||'?')+"）";
-  updateHappy(); $('#careMsg').textContent="何をあげる？";
+  careRes=res; careTab='food'; res.level=res.level||1;
+  refreshCareTitle(res);
+  updateHappy(); $('#careMsg').textContent=`「${levelTitle(res.level)}」 何をあげる？`;
   $$('.care-tab').forEach(t=>t.classList.toggle('sel',t.dataset.tab==='food'));
   buildCareGrid();
   showScreen('careScreen');
@@ -1320,20 +1400,22 @@ function reaction(res, kind){
 function giveFood(f){
   if(S.gold<f.price){ toast("Gが足りないよ！"); return; }
   S.gold-=f.price;
-  const fav=(careRes.favFood===f.id); let tip;
-  if(fav){ careRes.happy=Math.min(100,careRes.happy+20); tip=f.price; $('#careMsg').textContent="🥰 "+reaction(careRes,'love'); }
-  else   { careRes.happy=Math.min(100,careRes.happy+9);  tip=Math.floor(f.price*0.5); $('#careMsg').textContent="😋 "+reaction(careRes,'ok'); }
-  S.gold+=tip;
-  if(careRes.happy>=100 && !careRes.maxedOnce){ careRes.maxedOnce=true; S.gold+=200; toast("幸せMAX！ボーナス +200G 🎉"); }
+  const fav=(careRes.favFood===f.id); let tip, gain;
+  if(fav){ gain=20; tip=f.price;                  $('#careMsg').textContent="🥰 "+reaction(careRes,'love'); }
+  else   { gain=9;  tip=Math.floor(f.price*0.5);  $('#careMsg').textContent="😋 "+reaction(careRes,'ok'); }
+  S.gold += Math.round(tip*(1+0.1*((careRes.level||1)-1)));  // 高レベルほどチップ収入UP
+  const up=addHappy(careRes, gain);
+  if(up.leveled) onLevelUp(careRes, up);
   updateHappy(); core.refreshHUD(); autosave();
 }
 function giveCloth(c){
   if(careRes.clothId===c.id){ toast("もう着ているよ"); return; }
   if(S.gold<c.price){ toast("Gが足りないよ！"); return; }
   S.gold-=c.price; careRes.clothId=c.id;
-  careRes.happy=Math.min(100,careRes.happy+10);
   $('#careMsg').textContent="👕 "+reaction(careRes,'cloth');
   careStage.set(careCharGroup(careRes));
+  const up=addHappy(careRes, 10);
+  if(up.leveled) onLevelUp(careRes, up);
   updateHappy(); core.refreshHUD(); buildCareGrid(); autosave();
 }
 function closeCare(){
@@ -1419,7 +1501,7 @@ async function loadGame(){
     const obj=JSON.parse(raw);
     S.islandName=obj.islandName||""; S.islandYomi=obj.islandYomi||"しま";
     S.gold=obj.gold??1000; S.clothUnlocked=!!obj.clothUnlocked;
-    S.residents.length=0; (obj.residents||[]).forEach(r=>S.residents.push(r));
+    S.residents.length=0; (obj.residents||[]).forEach(r=>{ if(r.level==null) r.level=1; S.residents.push(r); });
     S.buildings.length=0; (obj.buildings||[]).forEach(b=>S.buildings.push(b));
     return true;
   }catch(e){ return false; }
