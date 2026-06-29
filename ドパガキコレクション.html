@@ -1499,9 +1499,12 @@ async function loadGame(){
   try{
     const obj=JSON.parse(raw);
     S.islandName=obj.islandName||""; S.islandYomi=obj.islandYomi||"しま";
-    S.gold=obj.gold??1000; S.clothUnlocked=!!obj.clothUnlocked; S.presentUnlocked=!!obj.presentUnlocked;
+    S.gold=obj.gold??1000;
     S.residents.length=0; (obj.residents||[]).forEach(r=>{ if(r.level==null) r.level=1; S.residents.push(r); });
     S.buildings.length=0; (obj.buildings||[]).forEach(b=>S.buildings.push(b));
+    // 解禁は住人数から再判定（保存フラグが無い/古いセーブも自己修復）
+    S.clothUnlocked   = !!obj.clothUnlocked   || S.residents.length>=2;
+    S.presentUnlocked = !!obj.presentUnlocked || S.residents.length>=3;
     return true;
   }catch(e){ return false; }
 }
