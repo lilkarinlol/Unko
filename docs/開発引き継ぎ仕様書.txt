@@ -1,0 +1,376 @@
+================================================================
+　ドパガキコレクション  開発引き継ぎ仕様書
+　（Claude Code 向けハンドオフ・ドキュメント）
+================================================================
+最終更新: 2026-06-29
+対象ファイル: ドパガキコレクション.html（単一HTML・約218KB）
+
+
+----------------------------------------------------------------
+0. このドキュメントについて
+----------------------------------------------------------------
+このゲーム「ドパガキコレクション」を Claude Code に引き継いで開発を
+続けるための説明書です。ゲームの全体像・ファイル構造・データ設計・
+各機能の実装場所・「ハマりどころ」・拡張の入口までを記載しています。
+
+まず最初に読むべき箇所:
+  - 「3. ファイル構造」… HTML内部がどう分かれているか
+  - 「5. アーキテクチャ」… グローバル window.DOPA / window.DOPA.core 経由で
+    各モジュールが連携している
+  - 「9. 実装ルール・ハマりどころ」… ここを守らないと見た目が崩れる
+
+
+----------------------------------------------------------------
+1. ゲーム概要
+----------------------------------------------------------------
+ジャンル : 3D箱庭育成ゲーム（スマホ縦画面前提）
+内容     : 自分で名前をつけた島に、MBTI性格を持つ3Dキャラ「ドパガキ」を
+           キャラメイクで作って住まわせ、食べ物や服を与えて幸せにしていく。
+           木・家・お店を island に配置して箱庭を育てる。
+操作感   : Tomodachi Collection（トモコレ）/ どうぶつの森 的なゆるい育成。
+ビジュアル: Mii / Roblox 風の約3頭身デフォルメ3Dキャラ。
+           UIはポップ。フォントはドット系「DotGothic16」で統一。
+
+世界観メモ:
+  「ドパガキ」はユーザーの創作。キャラはドーパミン的な多幸感をまとった
+  ゆるい生き物、というニュアンス。ロゴはピンクの雲＋ポテチ袋(CHIPS)＋
+  コーラ系エナドリ＋マニキュアのモチーフ（タイトルに画像埋め込み済み）。
+
+
+----------------------------------------------------------------
+2. 技術スタック（ビルド不要・単一HTML）
+----------------------------------------------------------------
+- 3D       : Three.js r128（CDN: cdnjs から読み込み）
+             → <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js">
+             ※ r128 前提。OrbitControls や CapsuleGeometry は未使用（r128非対応のため）。
+- フォント : Google Fonts「DotGothic16」（<link> で読み込み・オンライン時に反映）
+             フォールバックで Hiragino / Noto Sans JP 等のゴシック。
+- 保存     : window.storage（Claudeアーティファクト永続ストレージ）優先、
+             無ければ localStorage に自動フォールバック（後述「8. セーブ/ロード」）。
+- 依存なし : npm パッケージ・ビルドツール・トランスパイルは一切不要。
+             ブラウザでHTMLを開けばそのまま動く。バニラJS（ES2017, async/await使用）。
+- 描画     : WebGL。島用1つ＋プレビュー用（キャラメイク/ケア/家）を遅延生成。
+             同時に最大4つの WebGLContext を使う設計。
+
+
+----------------------------------------------------------------
+3. ファイル構造（単一HTMLの内部）
+----------------------------------------------------------------
+配布物は「ドパガキコレクション.html」1ファイルのみ。
+ただし内部は論理的に4ブロックに分かれており、コメントの区切りで探せる。
+
+  [A] <head> ～ <style> 全CSS
+        画面（.screen）ごとのレイアウト、HUD、ツールバー、視点スティック、
+        キャラメイクUI、ケア画面、家、モーダル、吹き出し等のスタイル。
+
+  [B] <body> 各画面のHTML
+        #titleScreen / #islandScreen / #makerScreen / #careScreen /
+        #houseScreen と、共通オーバーレイ（#toast, #saveBurst, #quitModal,
+        #diagModal 等）。.screen.active のクラスで表示を切り替える。
+
+  [C] ロゴ埋め込みスクリプト
+        const LOGO_B64 = "....(Base64の透過PNG)...";
+        → #titleLogo の src に data URI として差し込む。
+
+  [D] ゲーム本体スクリプト（巨大）
+        以下の3つの即時関数(IIFE)が連結されている。コメントで区切られている:
+          /* ===== game_js1.js ===== */  … データ定義 + 3Dキャラ生成
+          /* ===== game_js2.js ===== */  … 3Dシーン/島/操作/カメラ/会話
+          /* ===== game_js3.js ===== */  … 画面遷移/キャラメイクUI/診断/ケア/家/セーブ
+
+【重要】元はこの3つ＋game_base.html＋logo_b64.txt に分割して開発し、
+Pythonスクリプトで1つのHTMLに連結している。Claude Code で大きく改修するなら、
+最初に「単一HTML → 5ファイルに再分割」しておくと編集しやすい（特にロゴの
+Base64文字列が約21万文字あり、単一ファイルだと検索・編集が重いため）。
+区切りコメント（/* ===== game_jsN.js ===== */）と LOGO_B64 を目印に分割可能。
+
+連結の擬似コード（参考・再ビルド方法）:
+  base.html の「__LOGO__」を logo_b64.txt の中身で置換し、
+  「/* ====== ゲーム本体スクリプトは後続で挿入 ====== */」を
+  js1+js2+js3 の連結で置換して出力する。
+
+
+----------------------------------------------------------------
+4. 画面（state machine）
+----------------------------------------------------------------
+showScreen(id) で .screen.active を付け替えて遷移する。
+
+  titleScreen   タイトル。ロゴ表示／島の命名（名前＋しま/じま/とう）／
+                「決定！」「続きから遊ぶ」。
+                ↓ 決定（初回は1体作成必須へ）
+  makerScreen   キャラメイク。上半分=3Dプレビュー（自動回転）、下半分=設定UI。
+                ↓ 「島に呼ぶ！」
+  islandScreen  メイン。3Dの島＋HUD＋ツールバー＋視点スティック＋ズーム。
+                ├ 住人タップ → careScreen
+                ├ 家タップ   → houseScreen
+                └ 「住人追加」 → makerScreen
+  careScreen    住人アップ。食べ物/服を与えて幸せゲージとお金が増減。
+  houseScreen   家の中。住人が室内に並ぶ。
+
+遷移の起点はすべて game_js3.js の wire() 内のイベント結線。
+
+
+----------------------------------------------------------------
+5. アーキテクチャ（モジュール間の連携）
+----------------------------------------------------------------
+3つのIIFEは、グローバルの window.DOPA / window.DOPA.core を介して連携する。
+
+● game_js1.js が公開: window.DOPA
+   データ: MBTI, MBTI_CATCH, FOODS, CLOTHES, SKIN_COLORS, HAIR_COLORS,
+           CLOTHES_COLORS, EYE_COLORS, HAIR_STYLES, EYE_SHAPES,
+           NOSE_SHAPES, MOUTH_SHAPES
+   関数  : buildCharacter(THREE, spec) … 3Dキャラ(Group)を生成して返す
+           defaultSpec() … キャラ初期spec
+           $ , $$ … querySelector / querySelectorAll ラッパ
+           showScreen(id) , toast(msg)
+
+● game_js2.js が公開: window.DOPA.core
+   state            … ゲーム状態オブジェクト（唯一の真実。後述）
+   SAVE_KEY         … "dopagaki_save_v1"
+   THREE (getter)   … 内部の THREE 参照
+   initScene()      … 島の3Dシーン初期化＋描画ループ開始
+   rebuildIsland()  … state から島の住人/建物メッシュを作り直す
+   setupIslandInput() … 島のタップ/ドラッグ入力を結線
+   setupCamStick()  … 視点スティック＋ズームを結線
+   setMode(mode)    … 操作モード切替（move/tree/house/shopFood/shopCloth）
+   refreshHUD()     … 島名・ゴールド・服屋ロック表示を更新
+   getResidentMeshes() , setModeRef(m)
+
+● game_js3.js が追加: window.DOPA.core.openCare(res) , openHouse()
+   （js2 の handleTap から window.DOPA.core.openCare / openHouse を呼ぶため、
+     js3 側で core に後付けしている。読み込み順は js1→js2→js3 が前提）
+
+【連携の肝】state は js2 が所有する“同一オブジェクト参照”を、js3 が
+const S = core.state として受け取り「破壊的に書き換える(mutate)」。
+state を再代入してはいけない（js2側の参照が切れるため）。ロード時も
+配列は length=0 にしてから push で詰め直している（5-8章参照）。
+
+
+----------------------------------------------------------------
+6. データ構造（state と各オブジェクト）
+----------------------------------------------------------------
+state（game_js2.js 内、core.state として共有）:
+  {
+    islandName : string   // 例 "テスト"（"島"は表示時に付加）
+    islandYomi : string   // "しま" | "じま" | "とう"
+    gold       : number   // 所持金。初期 1000
+    residents  : Resident[]   // 住人配列
+    buildings  : Building[]   // 木・家・お店の配列
+    clothUnlocked : boolean   // 2人目作成で true（服屋・服タブ開放）
+  }
+
+Resident（住人）:
+  {
+    spec   : Spec        // 見た目＋名前＋MBTI（下記）
+    happy  : number      // 幸せ 0..100。初期 20
+    pos    : {x,z}       // 島上の座標（y は描画時 0.5 固定）
+    favFood: string      // 好物の food id（FOODSのid。好物だと幸せ大UP＆採算+）
+    clothId: string|null // 着ている服の id（CLOTHESのid）。null=デフォルト服
+    maxedOnce: boolean    // 幸せ100到達ボーナスを既に得たか
+  }
+
+Building（建物）:
+  { type:'tree'|'house', pos:{x,z} }
+  ※ 現状 shopFood / shopCloth も内部的に type:'house' を push している
+    （見た目は家と同じ。お店専用メッシュは未実装＝TODO）。
+
+Spec（キャラ見た目・キャラメイクの全項目）:
+  {
+    name      : string   // 名前（空なら "ドパガキ"）
+    mbti      : string   // 例 "ENFP"（16種）
+    skin      : number   // 0xRRGGBB 肌色
+    hair      : number   // 髪色
+    hairStyle : string   // HAIR_STYLES のいずれか（8種）
+    clothes   : number   // 服の色
+    bottomType: string   // "ズボン" | "スカート"
+    bottomColor: number  // ボトムスの色
+    eyeShape  : string   // EYE_SHAPES（丸目/つり目/たれ目/ジト目）
+    eyeColor  : number   // 目の色
+    nose      : string   // NOSE_SHAPES（丸/小さい/つん）
+    mouth     : string   // MOUTH_SHAPES（にっこり/への字/小さい口）
+  }
+
+
+----------------------------------------------------------------
+7. マスターデータ（game_js1.js 冒頭で定義）
+----------------------------------------------------------------
+MBTI（16種）: INTJ INTP ENTJ ENTP INFJ INFP ENFJ ENFP
+              ISTJ ISFJ ESTJ ESFJ ISTP ISFP ESTP ESFP
+MBTI_CATCH  : 各タイプの一言キャッチコピー（キャラメイクで表示）
+
+FOODS（食べ物8種）: id / name / price / emo
+  onigiri おにぎり 50 / pan パン 120 / ramen ラーメン 200 / cake ケーキ 260 /
+  apple りんご 80 / ice アイス 150 / burger バーガー 230 / sushi おすし 300
+
+CLOTHES（服8種）: id / name / price / color(0xRRGGBB)
+  c0 あか120 / c1 あお120 / c2 みどり140 / c3 きいろ140 /
+  c4 ピンク160 / c5 むらさき180 / c6 しろ200 / c7 くろ220
+
+色配列     : SKIN_COLORS(6) / HAIR_COLORS(7) / CLOTHES_COLORS(8) / EYE_COLORS(6)
+髪型       : HAIR_STYLES = ショート/ロング/ツインテール/ボブ/ポニーテール/
+                           アフロ/お団子/坊主
+目の形     : EYE_SHAPES = 丸目/つり目/たれ目/ジト目
+鼻         : NOSE_SHAPES = 丸/小さい/つん
+口         : MOUTH_SHAPES = にっこり/への字/小さい口
+ボトムス色 : game_js3.js の BOTTOM_COLORS（6色）/ BOTTOM_TYPES（ズボン/スカート）
+
+定数: ISLAND_R = 8（島の半径。設置可能範囲・キャラ移動クランプに使用）
+
+
+----------------------------------------------------------------
+8. セーブ／ロード（Claude上でも動く二段構え）
+----------------------------------------------------------------
+保存キー : "dopagaki_save_v1"（const SAVE_KEY）
+保存内容 : state を JSON.stringify した文字列（丸ごと）
+
+保存先の優先順位（game_js3.js）:
+  1. window.storage があれば（＝Claudeアーティファクト環境）そちらに保存／読込
+       await window.storage.set(SAVE_KEY, json, false)
+       await window.storage.get(SAVE_KEY, false) → {value} / 未保存キーは例外
+  2. 無ければ localStorage（外部公開先・通常ブラウザ）
+
+主要関数（すべて async）:
+  saveGame(showFx)  保存。showFx=true で「💾保存しました！」演出（#saveBurst）。
+  autosave()        700ms デバウンスの自動保存（食事/着替え/住人追加で呼ぶ）。
+  loadGame()        保存を読み state を mutate して復元。成功で true。
+  hasSave()         保存有無（「続きから」ボタン表示判定）。
+  readRaw()/writeRaw() 低レベルの読み書き（cloud→localStorage フォールバック）。
+
+注意:
+  - state は再代入せず破壊的更新（loadGame は配列を length=0 → push で復元）。
+  - 終了（#quitYes）は await saveGame() 後に location.reload() する
+    （保存完了前のリロードでデータを失わないため）。
+  - window.storage.get は未保存キーで“例外を投げる”ため try/catch 必須。
+
+
+----------------------------------------------------------------
+9. 実装ルール・ハマりどころ（厳守。崩れやすい箇所）
+----------------------------------------------------------------
+これらは過去に何度も崩れて直した経緯のある重要ルール。改修時に必ず守ること。
+
+[髪 buildHair()（game_js1.js）]
+  - 髪は頭の球体に沿わせる。顔の前面（目・鼻・口がある +Z 側の下部）は
+    絶対に覆わない。前髪は左右対称で「眉の上」で止める。
+  - 後ろ髪は後頭部(-Z)側のみ。坊主は前髪なし・頭にぴったり。
+  - アフロは顔の前面が出るよう上半球＋前髪のみ（顔をくり抜くイメージ）。
+  - 新しい髪型を足すときも「顔を覆わない」を最優先で。
+
+[口 buildCharacter()（game_js1.js）]
+  - 「にっこり」は下に膨らむ笑顔、「への字」は上に膨らむ（向きを逆にしない）。
+    Torus を半周で作り rotation.z で向きを決めている。表示と選択を一致させる。
+
+[目]
+  - 4種（丸/つり/たれ/ジト）を見た目に反映。つり/たれは rotation.z、
+    ジトは scale.y を潰して表現。
+
+[操作の競合（game_js2.js のポインタ処理）]
+  - move モード時：住人を「軽くタップ」→ ケア画面、「ドラッグ」→ 移動。
+    pointerup で「実際に動かした(movedFar)」場合のみ移動確定し、それ以外は
+    handleTap に流す（タップでケア画面が開くように）。ここを壊すと
+    「住人をタップしてもケア画面が開かない」不具合が再発する。
+  - 設置モード（tree/house/shopFood/shopCloth）時：地面タップで配置。
+    近すぎ（1.4以内）は不可、島外(ISLAND_R-0.8)も不可。
+  - pointercancel で dragging を必ず解除。
+
+[カメラ（game_js2.js animate()）]
+  - 角度・距離は Lerp 補間で“ぬるぬる”動かす（スティック/ズームは目標値を
+    更新するだけ）。距離レンジ 7〜20。
+  - 視点スティックは右下。ツールバー（下部）と重ならない位置に。
+
+[ロゴ]
+  - mix-blend-mode は使わない。透過PNGをそのまま data URI で表示する。
+
+[プレビューの3Dステージ（game_js3.js createStage）]
+  - 画面が display:none のときは container の幅高が0になるため、
+    show(true) のタイミングで size() を呼んでリサイズしている。
+    新しいプレビューを足すときも「表示後にサイズ確定」を守る。
+
+
+----------------------------------------------------------------
+10. 主要関数の所在（どこを触ればよいか）
+----------------------------------------------------------------
+game_js1.js
+  buildCharacter(THREE, spec) … 体/脚/靴/腕/手/頭/目/眉/鼻/口/ほっぺ/髪を組む
+  buildHair(THREE, grp, style, mat, R) … 髪型8種の生成
+  defaultSpec() … 初期spec
+
+game_js2.js
+  initScene() / animate() … シーン・ライト・島・描画ループ・カメラ補間
+  rebuildIsland() … state→メッシュ再生成（makeTree / makeHouse）
+  setupIslandInput() … pointerdown/move/up、pickGround/pickResident/pickBuilding、
+                       handleTap、tooClose、setMode、showHint/hideHint
+  setupCamStick() … 視点スティック・ズーム
+  会話: updateConversations / mbtiLine / startConvo / showBubble / showMark /
+        updateBubblePositions（近接で❗→MBTI別セリフ吹き出し）
+  refreshHUD()
+
+game_js3.js
+  createStage(container, opt) … プレビュー用ミニ3Dステージ（自動回転）
+  ensureIsland() … 島の初期化を一度だけ
+  キャラメイク: buildMakerUI / buildSwatches / buildChips / syncMakerUI /
+               refreshMakerPreview / openMaker(forced) / confirmMaker / findFreeSpot
+  MBTI診断: DIAG(8問) / startDiag / showDiagQ / answerDiag（E/I,N/S,F/T,P/J集計）
+  ケア: openCare / updateHappy / buildCareGrid / giveFood / giveCloth /
+        reaction(MBTI反映セリフ) / closeCare
+  家: buildHouseScene / openHouse / closeHouse
+  セーブ: hasCloud / writeRaw / readRaw / saveGame / autosave / hasSave / loadGame
+  wire() … 全ボタンのイベント結線
+  boot() … 起動（buildMakerUI→wire→続きから表示判定→タイトル表示）
+
+
+----------------------------------------------------------------
+11. ゲームバランス（現状値）
+----------------------------------------------------------------
+- 初期ゴールド 1000G。
+- 食事: 価格を支払い、好物なら happy+20 & チップ +price（実質トントン）、
+        好物以外は happy+9 & チップ +price/2（やや赤字）。
+  → 「好物を当てて幸せにしつつ稼ぐ」ループ。
+- 幸せ100に初到達で +200G ボーナス（maxedOnce で一度だけ）。
+- 服: 価格を支払い happy+10、見た目が即変わる。
+- 2人目作成で服屋＆服タブ開放（NEWバッジ）。
+
+
+----------------------------------------------------------------
+12. 既知の制限・TODO（拡張の入口）
+----------------------------------------------------------------
+- お店メッシュ未実装: shopFood/shopCloth は現状ただの家として置かれる。
+  → 食べ物屋・服屋の専用3Dモデルを makeShop() として追加し、
+    Building.type を 'shopFood'/'shopCloth' に分けて rebuildIsland で出し分ける。
+- 住人の自律歩行は無し（その場会話のみ）。簡単な徘徊AIを足す余地あり。
+- 幸せの時間減衰や来訪イベントなどの“継続的な遊び”は未実装。
+- 多言語化: 海外公開用に英語タイトル/操作説明の切替を入れると良い。
+  文字列がコード直書きなので、辞書オブジェクト化→言語切替が無難。
+- フォント: DotGothic16 はネット読込。オフライン公開先ならサブセット埋め込み or
+  別フォント自前ホストを検討（丸ゴシックにするなら M PLUS Rounded 1c が候補）。
+- お金の使い道拡張（家具・島の装飾・ガチャ的な服解放など）。
+- セーブのスロット複数化（キーを v1 から拡張）。互換のためキー名は据え置き推奨。
+
+
+----------------------------------------------------------------
+13. テスト方法（参考）
+----------------------------------------------------------------
+WebGL実画面の自動テストは難しいため、ロジックは「THREEスタブ＋jsdom」で
+検証してきた。やり方:
+  - THREE の使用APIだけをダミー実装したスタブを用意（new で生成できる関数で）。
+  - jsdom にHTMLを読み込み、CDNのthree.jsタグを除去してスタブを window.THREE に。
+  - localStorage を差し替え、DOMContentLoaded を発火して boot() を走らせる。
+  - 「島作成→キャラ作成→診断→2人目→ケア（食事/着替え）→家→セーブ→ロード」を
+    onclick直叩きで通し、例外・状態・保存復元を assert。
+  - buildCharacter は 全髪型×目×口×鼻＝288通りを生成して例外ゼロを確認。
+  - セーブ/ロードは async のため、各操作後に microtask を待ってから検証する。
+見た目（髪が顔にかぶる等）はスタブでは分からないので、実機プレビューで目視確認。
+
+
+----------------------------------------------------------------
+14. 背景（経緯メモ）
+----------------------------------------------------------------
+当初はSNSアプリ「Gravity」のAIゲーム作成機能で制作していたが、大規模化で
+処理が固まる不具合に当たり、海外のAIゲーム公開プラットフォームへ出すために
+Three.js の単一HTMLとしてゼロから作り直したのが本作。日本語UI・全機能入り・
+スマホ縦画面前提で構築している。
+
+
+================================================================
+　以上。まずは単一HTMLを5ファイルへ再分割→「9. ハマりどころ」を踏まえて
+　改修するのがおすすめです。質問点があれば仕様の該当章番号で参照してください。
+================================================================
