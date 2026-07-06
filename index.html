@@ -1,0 +1,892 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>†＊ふうの おへや＊† ～Fuu's Secret Room～</title>
+<style>
+/* ================================================================
+   ＊ふうの おへや＊  ver.3.0 リニューアル！(2026.7.6)
+   素材はぜんぶ自作です。無断転載しないでね(＞＜)
+================================================================ */
+:root{
+  --pink:#ff9ec7; --hotpink:#ff5fa2; --deeppink:#e33d8a;
+  --lavender:#c9b3ff; --purple:#9a7bdc; --mint:#aef0d8;
+  --cream:#fffaf4; --ink:#6b3153; --sky:#8ed3ff; --lemon:#fff3a8;
+}
+*{ box-sizing:border-box; }
+html{ scroll-behavior:smooth; }
+
+body{
+  margin:0;
+  font-family:"MS PGothic","MS Pゴシック","Hiragino Maru Gothic ProN","Yu Gothic",sans-serif;
+  color:var(--ink);
+  font-size:14px;
+  /* レース×ストライプ×水玉の三層タイル */
+  background-color:#ffd9ec;
+  background-image:
+    radial-gradient(circle at 12px 12px, rgba(255,255,255,.9) 2.5px, transparent 3.5px),
+    radial-gradient(circle at 42px 42px, rgba(255,160,205,.8) 2.5px, transparent 3.5px),
+    repeating-linear-gradient(-45deg, rgba(255,255,255,.35) 0 12px, transparent 12px 24px),
+    linear-gradient(180deg,#ffd9ec,#ffcfe6 60%,#f3d9ff);
+  background-size:60px 60px, 60px 60px, auto, auto;
+  background-attachment:fixed;
+  cursor:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='26' height='26'><text y='19' font-size='17'>🎀</text></svg>") 4 4, auto;
+}
+
+/* ちいさいテキスト・装飾クラス */
+.s{ font-size:11px; }
+.xs{ font-size:10px; }
+.deco{ color:var(--hotpink); letter-spacing:.05em; }
+.rainbow{
+  background:linear-gradient(90deg,#ff5fa2,#ffae00,#3ecf6e,#3aa7ff,#a86bff,#ff5fa2);
+  background-size:300% 100%;
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  animation:rbw 5s linear infinite; font-weight:bold;
+}
+@keyframes rbw{ to{ background-position:300% 0; } }
+.blink{ animation:blink .9s steps(2,start) infinite; }
+@keyframes blink{ to{ visibility:hidden; } }
+.newmark{
+  display:inline-block; background:red; color:#ff0; font-weight:bold;
+  font-size:10px; padding:0 4px; transform:rotate(-6deg);
+  animation:blink .9s steps(2,start) infinite;
+}
+.spin{ display:inline-block; animation:spin 3s linear infinite; }
+@keyframes spin{ to{ transform:rotate(360deg); } }
+.bounce{ display:inline-block; animation:bnc 1s ease-in-out infinite; }
+@keyframes bnc{ 0%,100%{ transform:translateY(0);} 50%{ transform:translateY(-5px);} }
+.tilt-l{ transform:rotate(-2.5deg); }
+.tilt-r{ transform:rotate(2deg); }
+
+/* ================= ENTER表札 ================= */
+#gate{
+  position:fixed; inset:0; z-index:1000;
+  background:
+    radial-gradient(circle at 50% 35%, #ffe6f3 0%, #ffb7d9 55%, #e79fd8 100%);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  text-align:center; transition:opacity .6s;
+}
+#gate.closed{ opacity:0; pointer-events:none; }
+#gate .frame{
+  border:6px ridge #ffb0d2; background:rgba(255,255,255,.85);
+  padding:34px 44px; box-shadow:0 0 0 4px #fff, 0 0 40px rgba(255,95,162,.5);
+  position:relative;
+}
+#gate .frame::before, #gate .frame::after{
+  content:"🌹"; position:absolute; font-size:26px; top:-16px;
+}
+#gate .frame::before{ left:-14px; }
+#gate .frame::after{ right:-14px; transform:scaleX(-1); }
+#gate h1{ margin:0 0 6px; font-size:30px; }
+#gate .enter{
+  display:inline-block; margin-top:20px; padding:10px 40px;
+  font-size:20px; font-weight:bold; color:#fff; text-decoration:none;
+  background:linear-gradient(#ff8fc0,#ff5fa2 45%,#e33d8a);
+  border:4px outset #ffc2dd; letter-spacing:.4em; cursor:pointer;
+  text-shadow:1px 1px 0 #c02a6e;
+}
+#gate .enter:active{ border-style:inset; }
+#gate .warn{ margin-top:14px; }
+
+/* ================= 全体レイアウト ================= */
+.container{
+  width:min(960px,97vw); margin:20px auto;
+  background:var(--cream);
+  border:5px ridge var(--pink);
+  outline:3px dashed var(--hotpink); outline-offset:7px;
+  box-shadow:10px 10px 0 rgba(227,61,138,.28), 0 0 46px rgba(255,255,255,.7);
+  padding:12px;
+}
+.cols{ display:flex; gap:12px; align-items:flex-start; }
+.side{ width:196px; flex:none; }
+.main{ flex:1; min-width:0; }
+@media (max-width:720px){
+  .cols{ flex-direction:column; }
+  .side{ width:100%; }
+}
+
+/* ================= ヘッダー ================= */
+header.top{
+  text-align:center; padding:14px 8px 6px; position:relative;
+  background:
+    radial-gradient(circle at 8% 20%, rgba(255,255,255,.8) 0 6px, transparent 7px),
+    radial-gradient(circle at 92% 30%, rgba(255,255,255,.8) 0 5px, transparent 6px),
+    linear-gradient(180deg,#fff0f8,#ffe1ef);
+  border:3px double var(--hotpink); border-radius:14px;
+}
+.sitename{
+  font-size:clamp(30px,6.4vw,52px); font-weight:bold; letter-spacing:.04em;
+  background:linear-gradient(180deg,#fff 8%,#ffd9ec 30%,#ff5fa2 55%,#b44bd4 90%);
+  -webkit-background-clip:text; background-clip:text; color:transparent;
+  filter:
+    drop-shadow(1px 0 0 #a8306e) drop-shadow(-1px 0 0 #a8306e)
+    drop-shadow(0 1px 0 #a8306e) drop-shadow(0 -1px 0 #a8306e)
+    drop-shadow(3px 3px 0 #ffffff) drop-shadow(5px 5px 0 #ffabd2);
+  animation:namePulse 2.6s ease-in-out infinite;
+}
+@keyframes namePulse{ 0%,100%{ transform:scale(1);} 50%{ transform:scale(1.03);} }
+.sitename-sub{ font-size:12px; color:#b06a8e; letter-spacing:.34em; margin-top:2px; }
+.orbit{ position:absolute; font-size:20px; animation:orbitTwinkle 1.6s ease-in-out infinite; }
+.orbit:nth-child(2){ animation-delay:.4s; }
+.orbit:nth-child(3){ animation-delay:.8s; }
+.orbit:nth-child(4){ animation-delay:1.2s; }
+@keyframes orbitTwinkle{ 0%,100%{ opacity:.25; transform:scale(.7) rotate(0);} 50%{ opacity:1; transform:scale(1.15) rotate(20deg);} }
+
+.marquee{
+  display:block; background:#3b0f2a; border:2px solid var(--hotpink);
+  padding:4px 0; margin:10px 0 6px; font-size:13px; color:#ffde59;
+  overflow:hidden; white-space:nowrap; border-radius:99px;
+}
+.marquee span{ display:inline-block; padding-left:100%; animation:scrollx 18s linear infinite; }
+@keyframes scrollx{ to{ transform:translateX(-100%);} }
+
+.counter-row{
+  display:flex; gap:8px; justify-content:center; align-items:center;
+  flex-wrap:wrap; font-size:12px; margin:8px 0 2px;
+}
+.digits{
+  font-family:"Courier New",monospace; background:#000; color:#37ff6a;
+  padding:2px 7px; letter-spacing:4px; border:3px inset #9a9a9a; font-size:15px;
+  text-shadow:0 0 6px #37ff6a;
+}
+.kiriban{
+  background:var(--lemon); border:2px solid #f0b400; border-radius:6px;
+  padding:1px 8px; font-size:11px; font-weight:bold; color:#9a6b00;
+  transform:rotate(-1.5deg);
+}
+
+/* ================= サイドメニュー ================= */
+.menu, .sidebox{
+  background:#fff; border:3px double var(--hotpink); border-radius:10px;
+  padding:9px; margin-bottom:12px;
+}
+.menu-title, .sidebox-title{
+  text-align:center; font-weight:bold; font-size:13px; color:#fff;
+  background:linear-gradient(90deg,var(--hotpink),var(--purple));
+  border-radius:99px; padding:3px 0; margin:-2px 0 8px;
+  letter-spacing:.2em; text-shadow:1px 1px 0 rgba(140,30,90,.6);
+}
+.menu a{
+  display:block; text-decoration:none; color:var(--ink);
+  font-size:13px; padding:6px 6px 6px 24px; border-bottom:1px dotted #ffb8d8;
+  position:relative; background:#fff;
+}
+.menu a::before{ content:"▶"; position:absolute; left:6px; color:var(--hotpink); font-size:10px; top:8px; }
+.menu a:hover{ background:#ffeaf4; color:var(--deeppink); padding-left:30px; transition:.12s; }
+.menu a:hover::before{ content:"♡"; }
+.menu a small{ float:right; color:#c98ab0; font-size:10px; }
+
+.clockbox{ text-align:center; font-size:12px; }
+.clockbox .clk{
+  font-family:"Courier New",monospace; font-size:17px; letter-spacing:2px;
+  background:#20122e; color:#ffb3ff; border:3px inset #888;
+  display:inline-block; padding:2px 10px; margin:4px 0; text-shadow:0 0 8px #ff7bff;
+}
+
+/* MIDIプレイヤー */
+.midi{ text-align:center; }
+.midi button{
+  font-family:inherit; font-size:12px; font-weight:bold; cursor:pointer;
+  background:linear-gradient(#fefefe,#cfcfcf); border:3px outset #eee;
+  padding:4px 10px; color:#333;
+}
+.midi button:active{ border-style:inset; }
+.midi .track{ font-size:10px; color:#9a6b8f; margin-top:5px; }
+.eq{ display:flex; gap:2px; height:16px; align-items:flex-end; justify-content:center; margin-top:5px; }
+.eq i{
+  width:5px; background:linear-gradient(#ff5fa2,#a86bff); height:4px;
+  animation:eq 0.7s ease-in-out infinite; animation-play-state:paused;
+}
+.midi.playing .eq i{ animation-play-state:running; }
+.eq i:nth-child(2){ animation-delay:.1s;} .eq i:nth-child(3){ animation-delay:.25s;}
+.eq i:nth-child(4){ animation-delay:.05s;} .eq i:nth-child(5){ animation-delay:.32s;}
+.eq i:nth-child(6){ animation-delay:.18s;}
+@keyframes eq{ 0%,100%{ height:3px;} 50%{ height:16px;} }
+
+/* おみくじ */
+.omikuji button{
+  width:100%; font-family:inherit; font-weight:bold; font-size:13px; cursor:pointer;
+  background:linear-gradient(#ffde8a,#ffb43d); border:3px outset #ffe3a8;
+  padding:6px; color:#7a4a00;
+}
+.omikuji button:active{ border-style:inset; }
+.omikuji .result{
+  margin-top:7px; min-height:52px; font-size:12px; text-align:center;
+  background:#fff8ec; border:2px dashed #f0b400; border-radius:8px; padding:6px;
+}
+.omikuji .result b{ font-size:16px; color:#d4351c; }
+
+/* Web拍手 */
+.hakushu{ text-align:center; }
+.hakushu button{
+  font-family:inherit; font-size:14px; font-weight:bold; cursor:pointer;
+  background:linear-gradient(#ffc3dd,#ff8fc0); border:3px outset #ffd9ea;
+  border-radius:12px; padding:7px 16px; color:#8c2b5c;
+}
+.hakushu button:active{ border-style:inset; transform:scale(.96); }
+.hakushu .cnt{ font-size:11px; margin-top:5px; color:#b06a8e; }
+
+/* ================= 見出し ================= */
+h2.sec{
+  font-size:16px; margin:24px 0 10px; padding:6px 14px; color:#fff;
+  background:
+    repeating-linear-gradient(-45deg, rgba(255,255,255,.22) 0 8px, transparent 8px 16px),
+    linear-gradient(90deg,var(--hotpink),var(--purple) 70%,var(--sky));
+  border-left:12px solid var(--deeppink);
+  border-radius:0 16px 16px 0;
+  text-shadow:1px 1px 0 rgba(140,30,90,.65);
+  position:relative;
+}
+h2.sec::before{ content:"🌟 "; }
+h2.sec .en{
+  position:absolute; right:12px; bottom:4px; font-size:10px;
+  letter-spacing:.28em; opacity:.85; font-family:Verdana,sans-serif;
+}
+.line-deco{ text-align:center; color:#ff8fc0; font-size:12px; letter-spacing:2px; margin:16px 0; user-select:none; }
+
+/* ================= プロフ帳 ================= */
+.prof{
+  background:
+    linear-gradient(0deg, rgba(255,182,219,.25) 1px, transparent 1px) 0 0/100% 26px,
+    #fff;
+  border:4px double var(--hotpink); border-radius:14px;
+  padding:16px 14px 12px; position:relative;
+}
+.prof::after{
+  content:"PROFILE♡"; position:absolute; top:-13px; right:16px;
+  background:var(--hotpink); color:#fff; font-size:11px;
+  padding:2px 12px; border-radius:99px; letter-spacing:.16em;
+  transform:rotate(3deg); box-shadow:2px 2px 0 rgba(0,0,0,.12);
+}
+.prof-head{ display:flex; gap:14px; align-items:center; flex-wrap:wrap; margin-bottom:10px; }
+.purikura{
+  width:104px; height:120px; flex:none; position:relative;
+  background:linear-gradient(135deg,#ffe3f0,#e3d4ff);
+  border:4px solid #fff; outline:2px solid var(--hotpink);
+  box-shadow:3px 3px 0 rgba(227,61,138,.3);
+  display:flex; align-items:center; justify-content:center;
+  transform:rotate(-3deg);
+}
+.purikura::after{
+  content:"じがぞう(想像)"; position:absolute; bottom:2px; left:0; right:0;
+  text-align:center; font-size:9px; color:#b06a8e;
+}
+.pixel-cat{ image-rendering:pixelated; width:72px; height:72px; }
+.prof-msg{ flex:1; min-width:180px; font-size:13px; }
+.prof-msg .nameplate{
+  font-size:19px; font-weight:bold; color:var(--deeppink);
+  text-shadow:1px 1px 0 #ffd9ec, 2px 2px 0 #ffabd2;
+}
+table.profsheet{ width:100%; border-collapse:collapse; font-size:13.5px; }
+table.profsheet th{
+  width:8.6em; text-align:left; font-weight:bold; color:var(--hotpink);
+  padding:7px 6px; border-bottom:2px dotted #ffc0dd; vertical-align:top; white-space:nowrap;
+}
+table.profsheet th::before{ content:"♡ "; }
+table.profsheet td{ padding:7px 6px; border-bottom:2px dotted #ffc0dd; }
+.fillin{
+  border-bottom:1.5px solid #d9a6c2; min-width:7em; display:inline-block;
+  font-family:"Hiragino Maru Gothic ProN","Yu Gothic",cursive;
+}
+.stamp{
+  position:absolute; font-size:11px; font-weight:bold; color:#fff;
+  padding:8px 6px; border-radius:50%; text-align:center; line-height:1.15;
+  box-shadow:2px 2px 0 rgba(0,0,0,.15); pointer-events:none;
+}
+.stamp.a{ right:-8px; bottom:34px; background:#ff8f3d; transform:rotate(12deg); }
+.stamp.b{ left:-10px; bottom:-8px; background:#3aa7ff; transform:rotate(-9deg); }
+
+/* 100の質問ふう Q&A */
+.qa{ background:#fff; border:2px dashed var(--lavender); border-radius:10px; padding:10px 14px; }
+.qa dt{ font-weight:bold; color:var(--purple); margin-top:8px; }
+.qa dt::before{ content:"Q. "; color:var(--deeppink); }
+.qa dd{ margin:2px 0 6px 1em; border-bottom:1px dotted #e3c9f5; padding-bottom:5px; }
+.qa dd::before{ content:"A. "; color:#3aa7ff; font-weight:bold; }
+
+/* ================= すきなものシール帳 ================= */
+.seal-grid{
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+  gap:10px;
+}
+.seal{
+  background:#fff; border:2px solid #ffd0e6; border-radius:12px;
+  padding:10px 8px; text-align:center; position:relative;
+  box-shadow:2px 2px 0 rgba(255,95,162,.15);
+}
+.seal:nth-child(odd){ transform:rotate(-1.4deg); }
+.seal:nth-child(even){ transform:rotate(1.2deg); }
+.seal .icon{ font-size:26px; }
+.seal .ttl{ font-weight:bold; font-size:12.5px; color:var(--deeppink); margin:3px 0 2px; }
+.seal .txt{ font-size:11px; color:#8f5d78; }
+.seal .lv{ color:#ffae00; font-size:11px; letter-spacing:1px; }
+
+/* ================= リンク集 ================= */
+.linknote{
+  background:#f2fbff; border:2px solid var(--sky); border-radius:8px;
+  font-size:12px; padding:8px 12px; margin-bottom:10px;
+}
+.linknote::before{ content:"☆リンクについて☆ "; font-weight:bold; color:#1e7ec2; }
+.banners{
+  display:flex; flex-wrap:wrap; gap:12px; justify-content:center;
+  padding:14px 10px; background:#fff; border:3px dashed var(--pink); border-radius:12px;
+}
+a.banner{
+  width:200px; height:64px; position:relative;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  text-decoration:none; font-size:13px; font-weight:bold;
+  border:4px outset #fff; color:#fff; text-align:center; line-height:1.25;
+  text-shadow:1px 1px 0 rgba(0,0,0,.3);
+  transition:transform .12s; overflow:hidden;
+}
+a.banner::after{
+  content:""; position:absolute; top:0; left:-80%; width:50%; height:100%;
+  background:linear-gradient(100deg,transparent,rgba(255,255,255,.65),transparent);
+  animation:sheen 3.4s ease-in-out infinite;
+}
+@keyframes sheen{ 0%,55%{ left:-80%; } 75%,100%{ left:130%; } }
+a.banner small{ font-size:10px; font-weight:normal; opacity:.92; }
+a.banner:hover{ transform:scale(1.06) rotate(-1.5deg); border-style:inset; }
+.b1{ background:repeating-linear-gradient(45deg,#ff5fa2 0 9px,#ff8fc0 9px 18px); }
+.b2{ background:repeating-linear-gradient(-45deg,#8b7bff 0 9px,#b3a6ff 9px 18px); }
+.b3{ background:repeating-linear-gradient(90deg,#2fbf9a 0 11px,#7de3c8 11px 22px); }
+.b4{ background:repeating-linear-gradient(0deg,#ffa53d 0 9px,#ffc98a 9px 18px); }
+.b5{ background:repeating-linear-gradient(45deg,#5fb4ff 0 9px,#9ed2ff 9px 18px); }
+.b6{ background:repeating-linear-gradient(-45deg,#ff6b6b 0 9px,#ffa0a0 9px 18px); }
+.b7{ background:repeating-linear-gradient(135deg,#e070d8 0 9px,#f4a8ee 9px 18px); }
+.b8{ background:repeating-linear-gradient(90deg,#8a8a8a 0 10px,#bdbdbd 10px 20px); }
+
+.mybanner{
+  margin-top:12px; text-align:center; font-size:11px; color:#8f5d78;
+}
+.mybanner .bnr{
+  width:176px; height:62px; margin:6px auto 4px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  background:
+    radial-gradient(circle at 18% 30%, rgba(255,255,255,.5) 0 4px, transparent 5px),
+    radial-gradient(circle at 85% 70%, rgba(255,255,255,.5) 0 3px, transparent 4px),
+    linear-gradient(135deg,#ff5fa2,#a86bff);
+  color:#fff; font-weight:bold; border:3px ridge #ffd9ec; letter-spacing:.08em;
+  text-shadow:1px 1px 0 rgba(120,20,80,.5);
+}
+.mybanner .bnr small{ font-size:9px; letter-spacing:.3em; }
+
+/* ================= 日記 ================= */
+.diary{ background:#fff; border:3px double var(--purple); border-radius:12px; padding:4px 14px 10px; }
+.diary article{ border-bottom:2px dotted #dcc8f5; padding:10px 2px; }
+.diary article:last-child{ border-bottom:none; }
+.diary .date{
+  display:inline-block; background:var(--purple); color:#fff; font-size:11px;
+  padding:1px 10px; border-radius:99px; margin-right:6px;
+}
+.diary .dtitle{ font-weight:bold; color:var(--deeppink); }
+.diary p{ margin:6px 0 0; font-size:13px; line-height:1.75; }
+.tenki{ font-size:12px; }
+
+/* ================= BBS足あと ================= */
+.bbs{ background:#fff; border:3px solid var(--mint); border-radius:12px; padding:10px 12px; }
+.bbs .post{
+  background:#f4fdf9; border:2px solid #cdeee0; border-radius:8px;
+  padding:8px 10px; margin-bottom:8px; font-size:13px;
+}
+.bbs .post .meta{ font-size:11px; color:#4b9b7e; }
+.bbs .post .meta b{ color:#1d7a58; font-size:12.5px; }
+.bbs .post .res{
+  margin-top:6px; padding:5px 8px; background:#fff2f8;
+  border-left:4px solid var(--hotpink); font-size:12px; border-radius:0 6px 6px 0;
+}
+.bbs .post .res::before{ content:"└ ふう＞ "; font-weight:bold; color:var(--deeppink); }
+
+/* ================= きせかえ(テーマ) ================= */
+.theme-btns{ display:flex; gap:6px; justify-content:center; flex-wrap:wrap; }
+.theme-btns button{
+  font-family:inherit; font-size:11px; cursor:pointer; font-weight:bold;
+  border:3px outset #eee; padding:4px 9px;
+}
+.theme-btns button:active{ border-style:inset; }
+.t-pink{ background:#ffb7d9; color:#8c2b5c; }
+.t-sora{ background:#b3ddff; color:#1d5e96; }
+.t-yami{ background:#443152; color:#ffb3ff; }
+body.theme-sora{ background-color:#cfe9ff;
+  background-image:
+    radial-gradient(circle at 12px 12px, rgba(255,255,255,.95) 2.5px, transparent 3.5px),
+    radial-gradient(circle at 42px 42px, rgba(142,211,255,.9) 2.5px, transparent 3.5px),
+    repeating-linear-gradient(-45deg, rgba(255,255,255,.4) 0 12px, transparent 12px 24px),
+    linear-gradient(180deg,#cfe9ff,#bfe0ff 60%,#d9d4ff);
+}
+body.theme-yami{ background-color:#2c1e3e;
+  background-image:
+    radial-gradient(circle at 12px 12px, rgba(255,255,255,.5) 1.5px, transparent 2.5px),
+    radial-gradient(circle at 42px 42px, rgba(255,150,220,.5) 1.5px, transparent 2.5px),
+    linear-gradient(180deg,#2c1e3e,#1d1430);
+}
+
+/* ================= フッター ================= */
+footer{
+  text-align:center; margin-top:26px; padding-top:14px;
+  border-top:4px double var(--pink); font-size:11px; color:#b06a8e;
+}
+.webring{
+  display:flex; gap:8px; justify-content:center; margin:8px 0; flex-wrap:wrap; font-size:12px;
+}
+.webring a{
+  color:#1e7ec2; text-decoration:none; background:#eef7ff;
+  border:2px outset #cfe6f7; padding:2px 10px;
+}
+.webring a:active{ border-style:inset; }
+.badges{ display:flex; gap:8px; justify-content:center; margin:10px 0; flex-wrap:wrap; }
+.badge{
+  font-size:10px; padding:3px 8px; border:2px outset #ccc;
+  background:linear-gradient(#eee,#bbb); color:#333; font-family:Verdana,sans-serif;
+}
+.hidden-link{ color:#fdeef7; text-decoration:none; font-size:9px; }
+
+/* ================= エフェクト ================= */
+.spark{
+  position:fixed; pointer-events:none; font-size:14px; z-index:999;
+  animation:fall 1s ease-out forwards;
+}
+@keyframes fall{ to{ transform:translateY(44px) rotate(70deg); opacity:0; } }
+.snowstar{
+  position:fixed; top:-30px; pointer-events:none; z-index:5; user-select:none;
+  animation:snow linear forwards;
+}
+@keyframes snow{ to{ transform:translateY(110vh) rotate(240deg); opacity:.15; } }
+#pagetop{
+  position:fixed; right:14px; bottom:14px; z-index:50;
+  background:var(--hotpink); color:#fff; text-decoration:none; font-size:12px;
+  padding:8px 10px; border-radius:50%; border:3px outset #ffc2dd;
+  box-shadow:2px 3px 0 rgba(0,0,0,.2);
+}
+@media (prefers-reduced-motion: reduce){
+  *{ animation:none !important; transition:none !important; }
+}
+</style>
+</head>
+<body>
+
+<!-- ＊＊＊ ENTER表札 ＊＊＊ -->
+<div id="gate">
+  <div class="frame">
+    <div class="s deco">．｡.:*・゜†welcome†゜・*:.｡.</div>
+    <h1 class="rainbow">＊ふうの おへや＊</h1>
+    <div class="s">〜 Fuu's Secret Room 〜 since 2026.7</div>
+    <div style="font-size:34px; margin:8px 0;"><span class="bounce">🐈‍⬛</span><span class="bounce" style="animation-delay:.2s">🎀</span><span class="bounce" style="animation-delay:.4s">💿</span></div>
+    <button class="enter" id="enterBtn">ENTER</button>
+    <div class="warn s">⚠ 音が出ます！ボリュームに気をつけてね<br>
+    <span class="xs">Sorry, This site is Japanese only. / 800×600以上推奨</span></div>
+  </div>
+  <div class="s" style="margin-top:16px; color:#a34a7c;">▼ 18禁要素はありません。安心してね ▼</div>
+</div>
+
+<div class="container">
+
+  <!-- ＊＊＊ ヘッダー ＊＊＊ -->
+  <header class="top">
+    <span class="orbit" style="left:4%; top:12px;">✦</span>
+    <span class="orbit" style="left:13%; top:46px;">✧</span>
+    <span class="orbit" style="right:13%; top:10px;">✦</span>
+    <span class="orbit" style="right:4%; top:50px;">✧</span>
+    <div class="sitename-sub">．｡.:*・゜ welcome to my homepage ゜・*:.｡.</div>
+    <div class="sitename">†＊ふうの おへや＊†</div>
+    <div class="s" style="color:#b06a8e;">ねこ と 音楽 と かわいいもの でできてる個人サイトです(｡･ω･｡)</div>
+    <div class="marquee"><span>♡ ようこそいらっしゃいませ！ゆっくりしていってね ♡ 7/6 プロフ帳を書きなおしました＆日記こうしん！ ♡ 相互リンク大募集中です ♡ キリ番【25000】踏み逃げ禁止だよ〜 ♡ 直リンク・無断転載はダメ！ゼッタイ！ ♡</span></div>
+    <div class="counter-row">
+      あなたは <span class="digits" id="counter">0024653</span> 人目のお客様です
+      <span class="newmark">NEW!</span>
+      <span class="kiriban">キリ番まであと <b id="kiribanLeft">347</b> 人！</span>
+    </div>
+    <div class="xs" style="color:#c98ab0;">きょう：<span id="today_cnt">61</span>人　きのう：84人　（アクセス解析はウソつきません）</div>
+  </header>
+
+  <div class="line-deco">━━━━━ ．｡.:*・゜♡゜・*:.｡.━━━━━ ．｡.:*・゜♡゜・*:.｡.━━━━━</div>
+
+  <div class="cols">
+    <!-- ＊＊＊ サイドバー ＊＊＊ -->
+    <aside class="side">
+      <nav class="menu">
+        <div class="menu-title">＊MENU＊</div>
+        <a href="#profile">プロフ帳 <small>ver.3</small></a>
+        <a href="#suki">すきなもの図鑑</a>
+        <a href="#diary">ひみつ日記 <small>7/6★</small></a>
+        <a href="#links">リンク集</a>
+        <a href="#bbs">あしあと帳</a>
+        <a href="#" onclick="alert('工事中です(>_<) もうちょっとまってね！'); return false;">イラストの部屋 <small>工事中</small></a>
+        <a href="#" onclick="alert('ゲーム置き場は準備中…夏休みには公開したいな〜'); return false;">ゲーム置き場 <small>準備中</small></a>
+      </nav>
+
+      <div class="sidebox clockbox">
+        <div class="sidebox-title">とけい</div>
+        <div class="clk" id="clock">--:--:--</div>
+        <div class="xs" id="dateline">2026年7月6日(月)</div>
+        <div class="xs" id="greeting">こんにちは！</div>
+      </div>
+
+      <div class="sidebox midi" id="midibox">
+        <div class="sidebox-title">BGM</div>
+        <button id="midiBtn">▶ さいせい</button>
+        <div class="eq"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="track">♪ ふう作曲「ねこふみふみ.mid」<br>ループ再生です。うるさかったらごめんね</div>
+      </div>
+
+      <div class="sidebox omikuji">
+        <div class="sidebox-title">きょうの運勢</div>
+        <button id="omikujiBtn">おみくじを引く🎋</button>
+        <div class="result" id="omikujiResult">1日1回まで！<br>(ほんとは何回でもOK)</div>
+      </div>
+
+      <div class="sidebox hakushu">
+        <div class="sidebox-title">Web拍手</div>
+        <button id="clapBtn">パチパチ送る👏</button>
+        <div class="cnt">きょうの拍手：<b id="clapCnt">3</b>回<br><span class="xs">※メッセージも書けたらいいのにね</span></div>
+      </div>
+
+      <div class="sidebox">
+        <div class="sidebox-title">きせかえ</div>
+        <div class="theme-btns">
+          <button class="t-pink" onclick="setTheme('')">もも</button>
+          <button class="t-sora" onclick="setTheme('theme-sora')">そら</button>
+          <button class="t-yami" onclick="setTheme('theme-yami')">やみ</button>
+        </div>
+        <div class="xs" style="text-align:center; margin-top:6px; color:#b06a8e;">気分でお部屋の色を変えてね</div>
+      </div>
+
+      <div class="sidebox" style="text-align:center;">
+        <div class="sidebox-title">きりばん</div>
+        <div class="s"><b class="blink" style="color:red;">25000</b> 踏んだ人には<br>リクエストイラスト描きます☆<br><span class="xs">報告はあしあと帳まで！<br>キリ番踏み逃げは泣きます(´；ω；`)</span></div>
+      </div>
+    </aside>
+
+    <!-- ＊＊＊ メイン ＊＊＊ -->
+    <main class="main">
+
+      <h2 class="sec" id="profile">プロフ帳<span class="en">PROFILE</span></h2>
+      <div class="prof">
+        <div class="prof-head">
+          <div class="purikura">
+            <svg class="pixel-cat" viewBox="0 0 16 16" aria-label="ドット絵のしろねこ">
+              <rect width="16" height="16" fill="none"/>
+              <g fill="#fefefe">
+                <rect x="3" y="3" width="2" height="2"/><rect x="11" y="3" width="2" height="2"/>
+                <rect x="3" y="5" width="10" height="6"/>
+                <rect x="4" y="11" width="8" height="2"/>
+              </g>
+              <g fill="#ffb3d0">
+                <rect x="3" y="3" width="1" height="1"/><rect x="12" y="3" width="1" height="1"/>
+                <rect x="7" y="9" width="2" height="1"/>
+              </g>
+              <g fill="#3a2a3a">
+                <rect x="5" y="7" width="1" height="2"/><rect x="10" y="7" width="1" height="2"/>
+              </g>
+              <g fill="#f5a3c0">
+                <rect x="2" y="8" width="1" height="1"/><rect x="13" y="8" width="1" height="1"/>
+              </g>
+              <rect x="6" y="13" width="1" height="1" fill="#fefefe"/>
+              <rect x="9" y="13" width="1" height="1" fill="#fefefe"/>
+            </svg>
+          </div>
+          <div class="prof-msg">
+            <span class="nameplate">ふう</span>　<span class="s">(=本名はぜったいひみつ☆)</span><br>
+            <span class="s">HN の由来：うちのねこが「ふぅ…」ってため息つくから。かわいいでしょ。</span><br>
+            <span class="s deco">．｡.:*・゜ 管理人からひとこと ゜・*:.｡.</span><br>
+            <span class="s">深夜テンションで作ったページなので、まぶしかったらごめんなさい。でも後悔はしてません(｀・ω・´)</span>
+          </div>
+        </div>
+        <table class="profsheet">
+          <tr><th>なまえ</th><td><span class="fillin">ふう</span>　って呼んでね</td></tr>
+          <tr><th>たんじょうび</th><td><span class="fillin">8月5日</span>　しし座♌　<span class="xs">プレゼントは随時受付中(うそ)</span></td></tr>
+          <tr><th>けつえき型</th><td><span class="fillin">？型</span>　当てた人すごい。ヒント：マイペースって言われる</td></tr>
+          <tr><th>すんでるところ</th><td><span class="fillin">東京のどこか</span>　電車の音が聞こえるへや</td></tr>
+          <tr><th>せいかく</th><td>INFP／夜行性／思いつきで生きてる</td></tr>
+          <tr><th>しゅみ・とくぎ</th><td>ゲームづくり、セルフネイル研究、深夜の考えごと、ねこの観察</td></tr>
+          <tr><th>マイブーム</th><td>リミナルスペースの画像を集めて「ここ行ったことある気がする…」ってなること</td></tr>
+          <tr><th>さいきんの口ぐせ</th><td>「にょ？」（うつった。誰から？…ひみつ）</td></tr>
+          <tr><th>すきな食べもの</th><td>いちごオレ、コンビニの新作スイーツ、深夜のカップめん(背徳)</td></tr>
+          <tr><th>にがてなもの</th><td>朝、電話、G(名前も書きたくない)</td></tr>
+          <tr><th>たからもの</th><td>うちのねこ様、初めて作ったゲームのセーブデータ</td></tr>
+          <tr><th>ひとこと</th><td>ねこと音楽とかわいいものがあれば生きていけます(｡･ω･｡)ﾉ</td></tr>
+        </table>
+        <span class="stamp a">よく<br>できました</span>
+        <span class="stamp b">たいへん<br>マイペース</span>
+      </div>
+
+      <div class="line-deco">＋。：．ﾟ★ ．：＋。ﾟ☆．。＋ﾟ ．ﾟ。：＋★ﾟ．：。＋ﾟ☆</div>
+
+      <h3 class="s" style="margin:14px 0 6px; color:var(--purple);">▼ 勝手に答える「20の質問」より抜粋 ▼</h3>
+      <dl class="qa s">
+        <dt>朝型？夜型？</dt><dd>聞くまでもなく夜型。むしろ朝を見てから寝る型。</dd>
+        <dt>いちばん影響を受けた音楽は？</dt><dd>Aphex Twin。初めて聴いた日の衝撃は忘れられない…。あとMother Motherも永遠に聴いてる。K-POPは箱推し。</dd>
+        <dt>ネイルは何日おきに変える？</dt><dd>だいたい10日。剥がすときの背徳感がクセになる。今は右手だけ星空ネイル。</dd>
+        <dt>ゲームを作ってて一番うれしい瞬間は？</dt><dd>自分の作ったへんな世界を誰かが歩いてくれてるとき。バグすら愛おしい(直すけど)。</dd>
+        <dt>座右の銘は？</dt><dd>「まあ、にゃんとかなる」</dd>
+      </dl>
+
+      <h2 class="sec" id="suki">すきなもの図鑑<span class="en">FAVORITE</span></h2>
+      <div class="seal-grid">
+        <div class="seal"><div class="icon">🐈</div><div class="ttl">ねこ</div><div class="lv">★★★★★</div><div class="txt">白いのが特にすき。肉球は世界遺産に登録すべき。</div></div>
+        <div class="seal"><div class="icon">💿</div><div class="ttl">音楽</div><div class="lv">★★★★★</div><div class="txt">Aphex Twin / Mother Mother / K-POP。プレイリストは秘伝のタレ方式。</div></div>
+        <div class="seal"><div class="icon">💅</div><div class="ttl">ネイル</div><div class="lv">★★★★☆</div><div class="txt">セルフ派。ラメを何層まで重ねられるか実験中。現在5層。</div></div>
+        <div class="seal"><div class="icon">🎮</div><div class="ttl">ゲームづくり</div><div class="lv">★★★★★</div><div class="txt">あそぶのも作るのもすき。夢は「誰かの深夜3時」に遊ばれるゲーム。</div></div>
+        <div class="seal"><div class="icon">🚪</div><div class="ttl">リミナルスペース</div><div class="lv">★★★★☆</div><div class="txt">誰もいないプール、深夜のコンビニ。なつかしくてこわい、あの感じ。</div></div>
+        <div class="seal"><div class="icon">🧸</div><div class="ttl">かわいいもの全般</div><div class="lv">★★★★★</div><div class="txt">かわいいは正義であり法律。異論は受け付けます(聞くとは言ってない)。</div></div>
+      </div>
+
+      <h2 class="sec" id="diary">ひみつ日記<span class="en">DIARY</span></h2>
+      <div class="diary">
+        <article>
+          <span class="date">2026/07/06</span><span class="dtitle">サイト全面リニューアル！</span><span class="newmark">NEW!</span><span class="tenki">　☀のち🌙</span>
+          <p>3日徹夜(うそ。2日)してページを豪華にしました！きらきら増量、おみくじ設置、BGM自作。ねこに感想を聞いたら無視されました。かなしい。でも満足！！あしあと帳に感想書いてくれたらうれしいな…(チラッ</p>
+        </article>
+        <article>
+          <span class="date">2026/07/02</span><span class="dtitle">星空ネイルが完成した</span><span class="tenki">　🌧</span>
+          <p>ラメ5層はさすがにやりすぎた気がする。キーボード打つたびに指先が銀河。ゲームのコード書いてても銀河。バグも銀河のせいにできる。おすすめです。</p>
+        </article>
+        <article>
+          <span class="date">2026/06/28</span><span class="dtitle">深夜3時のコンビニ</span><span class="tenki">　☁</span>
+          <p>新作スイーツを買いに行ったら、店内BGMと蛍光灯の音だけの世界で「これ…リミナルスペースでは？」ってなった。いちごオレを買って帰りました。現世に戻ってきた味がした。</p>
+        </article>
+      </div>
+      <div class="s" style="text-align:right; margin-top:4px;"><a href="#" style="color:var(--purple);" onclick="alert('過去ログ倉庫は工事中です〜(はやく作れ)'); return false;">≫過去の日記(倉庫)</a></div>
+
+      <h2 class="sec" id="links">リンク集<span class="en">LINK</span></h2>
+      <div class="linknote">
+        当サイトはリンクフリーです！報告不要だけど、してくれたら小躍りします。相互リンクはあしあと帳から気軽にどうぞ♪　<b>画像の直リンクだけは禁止！</b>保存して使ってね。
+      </div>
+      <div class="banners">
+        <a class="banner b1" href="#" onclick="alert('ゲーム置き場は準備中！もうすぐだよ'); return false;">わたしのゲーム置き場<small>処女作 公開準備中！</small></a>
+        <a class="banner b2" href="#diary">ひみつ日記<small>不定期こうしん(週2目標)</small></a>
+        <a class="banner b3" href="#" onclick="alert('工事中(>_<)'); return false;">イラスト＆創作の部屋<small>モフ山のなかまたち</small></a>
+        <a class="banner b4" href="#" onclick="alert('ネイル記録帖はただいま撮影中…'); return false;">ネイル記録帖<small>セルフネイル研究レポ</small></a>
+        <a class="banner b5" href="#bbs">あしあと帳(BBS)<small>足あと残してね</small></a>
+        <a class="banner b6" href="#" onclick="alert('お友達サイト様、随時募集中です！'); return false;">お友達サイト様<small>すてきなおへや達</small></a>
+        <a class="banner b7" href="#" onclick="alert('素材はぜんぶ自作CSSです！すごくない？'); return false;">素材おきば<small>じつは全部手作り</small></a>
+        <a class="banner b8" href="#" onclick="alert('アンチページはありません。平和なサイトです'); return false;">裏ページ…？<small>※なにもないよ</small></a>
+      </div>
+      <div class="mybanner">
+        ▼ 当サイトへのリンクはこのバナーをどうぞ(保存してね！直リンだめ！) ▼
+        <div class="bnr">＊ふうの おへや＊<small>NEKO・MUSIC・KAWAII</small></div>
+        <span class="xs">176×62px / 心をこめた手作りバナーです</span>
+      </div>
+
+      <h2 class="sec" id="bbs">あしあと帳<span class="en">BBS</span></h2>
+      <div class="bbs">
+        <div class="post">
+          <div class="meta"><b>もちこ</b> さん　2026/07/06 (月) 02:14　<span class="xs">[†星空からきました†]</span></div>
+          リニューアルおめでとう〜！！きらきらしすぎて目がつぶれるかと思った(ほめてる)。相互リンクしよ〜！
+          <div class="res">もちこちゃんありがと〜！！目は大事にして(笑) 相互よろこんで！バナー持っていくね♪</div>
+        </div>
+        <div class="post">
+          <div class="meta"><b>通りすがりのねこ好き</b> さん　2026/07/05 (日) 23:47</div>
+          ドット絵のねこかわいいですね。じがぞう(想像)ってなんですか(笑)
+          <div class="res">見た目はほぼこのねこと同じという意味です(大うそ)。書きこみありがとうございます！また来てね☆</div>
+        </div>
+        <div class="post">
+          <div class="meta"><b>ふう(管理人)</b>　2026/07/04 (土) 03:33　<span class="xs">[じさくじえんではない]</span></div>
+          テスト書きこみ！あしあと帳できました〜。キリ番報告・相互リンク・ひとこと感想、なんでもどうぞ(・ω・)ノ
+        </div>
+        <div class="s" style="text-align:center; margin-top:6px;">
+          <button style="font-family:inherit; font-weight:bold; background:linear-gradient(#d8ffe9,#8fe0b8); border:3px outset #c8f5dc; padding:5px 18px; cursor:pointer; color:#1d7a58;" onclick="alert('書きこみフォームは工事中です(>_<)\n心の中で書きこんでください！ちゃんと届いてます')">✎ 書きこむ</button>
+        </div>
+      </div>
+
+      <div class="line-deco">━━━━━ ．｡.:*・゜♡゜・*:.｡.━━━━━ ．｡.:*・゜♡゜・*:.｡.━━━━━</div>
+
+      <h2 class="sec">おやくそく<span class="en">RULES</span></h2>
+      <div class="qa s">
+        <dl style="margin:0;">
+          <dt>リンクは自由？</dt><dd>フリーです！報告してくれたら小躍り＆お礼参りに行きます。</dd>
+          <dt>画像や素材は使っていい？</dt><dd>直リンクは禁止！保存してからならOKのものもあるので聞いてね。</dd>
+          <dt>けんか・あらしが来たら？</dt><dd>スルー検定1級を持っているのでスルーします(・ε・)　みんなも反応しないでね。</dd>
+          <dt>キリ番踏んだら？</dt><dd>ぜったい報告！！踏み逃げされると3日くらい引きずります。</dd>
+        </dl>
+      </div>
+
+      <footer>
+        <div class="webring">
+          <a href="#" onclick="alert('WebRing｢深夜の個人サイト同盟｣：前のサイトへ…はまだ誰もいません(泣)'); return false;">← まえ</a>
+          <a href="#" onclick="alert('ランダムジャンプ！…する先がまだありません。加盟者募集中！'); return false;">🎲 ランダム</a>
+          <a href="#" onclick="alert('次のサイトへ…も、まだです。同盟に入りませんか？'); return false;">つぎ →</a>
+        </div>
+        <div class="s deco">†深夜の個人サイト同盟† 加盟No.001(発起人)</div>
+        <div class="badges">
+          <span class="badge">IE 6.0 対応(気持ち)</span>
+          <span class="badge">800×600 推奨</span>
+          <span class="badge">MIDI: 自作</span>
+          <span class="badge">Since 2026.7</span>
+          <span class="badge">素材:じさく</span>
+        </div>
+        ．｡.:*・゜このページはリンクフリーです゜・*:.｡.<br>
+        禁・無断転載／禁・直リンク／推奨・夜ふかし<br><br>
+        (c) 2026 ＊ふうの おへや＊ All Rights Reserved... たぶん<br>
+        <a class="hidden-link" href="#" onclick="alert('｢隠しページを見つけたあなたへ｣\n\n…と見せかけて、まだ作ってません。ごめん！\nでも見つけてくれてありがとう。あなたが今日いちばんの功労者です。'); return false;">･</a>
+      </footer>
+
+    </main>
+  </div>
+</div>
+
+<a href="#" id="pagetop" title="いちばん上へ">▲</a>
+
+<script>
+/* ===== ENTER表札 ===== */
+const gate = document.getElementById("gate");
+document.getElementById("enterBtn").addEventListener("click", () => {
+  gate.classList.add("closed");
+  startBgm(); // 入室と同時にBGMスタート(2000年代の様式美)
+});
+
+/* ===== とけい・あいさつ ===== */
+const youbi = ["日","月","火","水","木","金","土"];
+function tick(){
+  const d = new Date();
+  const z = n => String(n).padStart(2,"0");
+  document.getElementById("clock").textContent = `${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}`;
+  document.getElementById("dateline").textContent =
+    `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日(${youbi[d.getDay()]})`;
+  const h = d.getHours();
+  document.getElementById("greeting").textContent =
+    h < 4 ? "こんな時間まで…おともだちだね" :
+    h < 11 ? "おはよう！えらい！" :
+    h < 18 ? "こんにちは〜(｡･ω･｡)" :
+    h < 23 ? "こんばんは！本番はこれから" : "そろそろ寝なさい(母)";
+}
+tick(); setInterval(tick, 1000);
+
+/* ===== カウンター(それっぽく増える) ===== */
+(function(){
+  const base = 24653;
+  const bump = Math.floor((Date.now() / 60000) % 300); // 見るたびちょっと増えてる風
+  const n = base + bump;
+  document.getElementById("counter").textContent = String(n).padStart(7,"0");
+  document.getElementById("kiribanLeft").textContent = Math.max(1, 25000 - n);
+  document.getElementById("today_cnt").textContent = 40 + (bump % 50);
+})();
+
+/* ===== 自作MIDI風BGM (WebAudioチップチューン) ===== */
+let audioCtx = null, bgmTimer = null, playing = false;
+const midibox = document.getElementById("midibox");
+const midiBtn = document.getElementById("midiBtn");
+// ねこふみふみ.mid：[音階(半音/A4基準), 長さ(拍)] 0=休符
+const melody = [
+  [0,1],[3,1],[7,1],[12,1],[7,1],[3,1],
+  [5,1],[8,1],[12,1],[15,2],[null,1],
+  [3,1],[7,1],[10,1],[15,1],[10,1],[7,1],
+  [8,1],[5,1],[3,1],[0,2],[null,1],
+];
+function note(semitone, when, dur){
+  const f = 440 * Math.pow(2, (semitone - 9) / 12) * 2; // 明るめオクターブ
+  const o = audioCtx.createOscillator();
+  const g = audioCtx.createGain();
+  o.type = "square";
+  o.frequency.value = f;
+  g.gain.setValueAtTime(0.0001, when);
+  g.gain.exponentialRampToValueAtTime(0.06, when + 0.02);
+  g.gain.exponentialRampToValueAtTime(0.0001, when + dur * 0.9);
+  o.connect(g).connect(audioCtx.destination);
+  o.start(when); o.stop(when + dur);
+}
+function playLoop(){
+  const bpm = 152, beat = 60 / bpm;
+  let t = audioCtx.currentTime + 0.05, total = 0;
+  for (const [s, d] of melody){
+    if (s !== null) note(s, t, beat * d);
+    t += beat * d; total += beat * d;
+  }
+  bgmTimer = setTimeout(playLoop, total * 1000);
+}
+function startBgm(){
+  if (playing) return;
+  try{
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    audioCtx.resume();
+    playLoop();
+    playing = true;
+    midibox.classList.add("playing");
+    midiBtn.textContent = "■ ていし";
+  }catch(e){ /* 音の出ない環境でもページは動く */ }
+}
+function stopBgm(){
+  clearTimeout(bgmTimer);
+  playing = false;
+  midibox.classList.remove("playing");
+  midiBtn.textContent = "▶ さいせい";
+}
+midiBtn.addEventListener("click", () => playing ? stopBgm() : startBgm());
+
+/* ===== おみくじ ===== */
+const kuji = [
+  ["超大吉","今日のあなたは無敵。ガチャを引くなら今。ねこにも好かれます。"],
+  ["大吉","新作スイーツとの運命の出会いあり。ラッキーアイテム：いちごオレ"],
+  ["中吉","夜ふかしが捗る日。でもお肌のためにほどほどにね。"],
+  ["小吉","ネイルがきれいに塗れる日。利き手じゃない方も成功します。"],
+  ["吉","可もなく不可もなく。そういう日こそBBSに書きこむと吉。"],
+  ["末吉","バグが3つ見つかるが3つとも直せる。実質勝ち。"],
+  ["凶","Gが出るかも。ラッキーアイテム：まるめた新聞紙(使わずに済みますように)"],
+  ["ねこ吉","今日すれちがうねこは全員あなたの味方。もふもふ指数MAX。"],
+];
+document.getElementById("omikujiBtn").addEventListener("click", () => {
+  const [r, msg] = kuji[Math.floor(Math.random() * kuji.length)];
+  document.getElementById("omikujiResult").innerHTML =
+    `<b>${r}</b><br><span class="xs">${msg}</span>`;
+});
+
+/* ===== Web拍手 ===== */
+let claps = 3;
+const clapWords = ["わ〜い！","うれしい〜！！","ありがと〜(泣)","一生忘れません","拍手のプロですか？","むしろこちらが拍手したい"];
+document.getElementById("clapBtn").addEventListener("click", (e) => {
+  claps++;
+  document.getElementById("clapCnt").textContent = claps;
+  const s = document.createElement("span");
+  s.className = "spark";
+  s.textContent = "👏";
+  s.style.left = e.clientX + "px"; s.style.top = e.clientY + "px";
+  document.body.appendChild(s);
+  setTimeout(() => s.remove(), 1000);
+  if (claps % 5 === 0) alert(clapWords[Math.floor(Math.random()*clapWords.length)]);
+});
+
+/* ===== きせかえ ===== */
+function setTheme(cls){
+  document.body.className = cls;
+}
+
+/* ===== きらきらカーソル ===== */
+const emojis = ["✨","💖","⭐","🌸","💫","🎀"];
+let last = 0;
+document.addEventListener("mousemove", (e) => {
+  const now = Date.now();
+  if (now - last < 55) return;
+  last = now;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const s = document.createElement("span");
+  s.className = "spark";
+  s.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+  s.style.left = e.clientX + "px";
+  s.style.top = e.clientY + "px";
+  document.body.appendChild(s);
+  setTimeout(() => s.remove(), 1000);
+});
+
+/* ===== 星が降る ===== */
+function snow(){
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+  const s = document.createElement("span");
+  s.className = "snowstar";
+  s.textContent = ["✦","✧","･",".","☆"][Math.floor(Math.random()*5)];
+  s.style.left = Math.random() * 100 + "vw";
+  s.style.fontSize = (8 + Math.random() * 12) + "px";
+  s.style.color = ["#fff","#ffd9ec","#ffe9a8","#d8c7ff"][Math.floor(Math.random()*4)];
+  s.style.animationDuration = (5 + Math.random() * 6) + "s";
+  document.body.appendChild(s);
+  setTimeout(() => s.remove(), 12000);
+}
+setInterval(snow, 450);
+
+/* ===== ページトップ ===== */
+document.getElementById("pagetop").addEventListener("click", (e) => {
+  e.preventDefault();
+  window.scrollTo({ top: 0, behavior: "smooth" });
+});
+</script>
+</body>
+</html>
