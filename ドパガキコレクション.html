@@ -245,6 +245,7 @@
       <div id="zoomBtns">
         <div class="zoom-b" id="zoomIn">＋</div>
         <div class="zoom-b" id="zoomOut">−</div>
+        <div class="zoom-b" id="viewReset" title="視点をリセット">⟳</div>
       </div>
 
       <div id="toolbar">
@@ -729,10 +730,13 @@ const SAVE_KEY = "dopagaki_save_v1";
 /* ---------- Three.js シーン（島） ---------- */
 let THREE = window.THREE;
 let scene,camera,renderer,clock;
-let islandGroup, residentMeshes=[], buildingMeshes=[];
+let islandGroup, residentMeshes=[], buildingMeshes=[], dirLight;
 let camAngle = 0.0, camTargetAngle=0.0, camDist=23, camTargetDist=23, camHeight=16;
 let camLookX=0, camLookZ=0, camTargetLookX=0, camTargetLookZ=0;
-const ISLAND_R = 11;
+let ISLAND_R = 11;                       // 住人が増えると拡張される（applyIslandSize）
+const ISLAND_BASE_R = 11;
+function maxCamDist(){ return Math.max(32, Math.round(ISLAND_R*2.0)); }
+function defaultCamDist(){ return Math.min(maxCamDist(), Math.round(ISLAND_R*2.1)); }
 let raycaster, pointer;
 let curMode = "move";
 let dragging=null, dragOffset=new THREE.Vector3();
@@ -742,7 +746,7 @@ function initScene(){
   const wrap = $('#islandCanvasWrap');
   scene = new THREE.Scene();
   scene.background = new THREE.Color(0x86d0ec);
-  scene.fog = new THREE.Fog(0x9bd8ef, 22, 40);
+  scene.fog = new THREE.Fog(0x9bd8ef, 26, 64);
   camera = new THREE.PerspectiveCamera(50, window.innerWidth/window.innerHeight, 0.1, 100);
   renderer = new THREE.WebGLRenderer({antialias:true});
   renderer.setSize(window.innerWidth, window.innerHeight);
@@ -760,16 +764,11 @@ function initScene(){
   dir.shadow.mapSize.set(1024,1024);
   dir.shadow.camera.left=-14; dir.shadow.camera.right=14;
   dir.shadow.camera.top=14; dir.shadow.camera.bottom=-14;
-  scene.add(dir);
+  scene.add(dir); dirLight = dir;
 
-  // 島
+  // 島（芝＋土台。住人数に応じてサイズ再構築される）
   islandGroup = new THREE.Group(); scene.add(islandGroup);
-  const grass = new THREE.Mesh(new THREE.CylinderGeometry(ISLAND_R,ISLAND_R,1.0,48),
-                new THREE.MeshStandardMaterial({color:0x8ed94b,roughness:1}));
-  grass.position.y=0; grass.receiveShadow=true; grass.name="ground"; islandGroup.add(grass);
-  const dirt = new THREE.Mesh(new THREE.CylinderGeometry(ISLAND_R,ISLAND_R*0.82,1.6,48),
-                new THREE.MeshStandardMaterial({color:0x9b6a3a,roughness:1}));
-  dirt.position.y=-1.2; islandGroup.add(dirt);
+  applyIslandSize();
 
   // 吹き出しレイヤー
   bubbleLayer = document.createElement('div');
@@ -857,7 +856,32 @@ function updateWander(dt){
 
 /* ---------- 島へ住人/建物を反映 ---------- */
 function clearMeshes(arr){ arr.forEach(m=>{ islandGroup.remove(m); if(m.userData.badgeEl){ m.userData.badgeEl.remove(); m.userData.badgeEl=null; } }); arr.length=0; }
+
+/* 住人が4人以上になると島が広がる（3人までは基本サイズ11） */
+function islandRadiusFor(n){ return Math.min(21, ISLAND_BASE_R + Math.max(0, n-3)*2); }
+function applyIslandSize(){
+  const target = islandRadiusFor(state.residents.length);
+  const hasGround = islandGroup.children.some(c=>c.name==='ground');
+  const grew = target > ISLAND_R;
+  if(target===ISLAND_R && hasGround) return false;
+  ISLAND_R = target;
+  // 既存の地面を作り直す
+  ['ground','dirt'].forEach(nm=>{ const o=islandGroup.children.find(c=>c.name===nm);
+    if(o){ islandGroup.remove(o); if(o.geometry) o.geometry.dispose(); } });
+  const grass = new THREE.Mesh(new THREE.CylinderGeometry(ISLAND_R,ISLAND_R,1.0,48),
+                new THREE.MeshStandardMaterial({color:0x8ed94b,roughness:1}));
+  grass.position.y=0; grass.receiveShadow=true; grass.name="ground"; islandGroup.add(grass);
+  const dirt = new THREE.Mesh(new THREE.CylinderGeometry(ISLAND_R,ISLAND_R*0.82,1.6,48),
+                new THREE.MeshStandardMaterial({color:0x9b6a3a,roughness:1}));
+  dirt.position.y=-1.2; dirt.name="dirt"; islandGroup.add(dirt);
+  // 影の範囲も島に合わせて広げる
+  if(dirLight){ const s=ISLAND_R+3; dirLight.shadow.camera.left=-s; dirLight.shadow.camera.right=s;
+    dirLight.shadow.camera.top=s; dirLight.shadow.camera.bottom=-s; dirLight.shadow.camera.updateProjectionMatrix(); }
+  return grew;
+}
+
 function rebuildIsland(){
+  applyIslandSize();
   clearMeshes(residentMeshes); clearMeshes(buildingMeshes);
   state.buildings.forEach(b=>{
     let m;
@@ -1077,6 +1101,12 @@ function showHint(t){ const h=$('#hint'); h.innerHTML=t+'<br><button class="btn 
 function hideHint(){ $('#hint').style.display='none'; }
 
 /* ---------- カメラ操作（スティック・ズーム） ---------- */
+// 視点を初期状態に戻す（近い向きへ最短回転・クローズアップ解除・標準ズーム）
+function resetView(){
+  camTargetAngle = Math.round(camAngle/(Math.PI*2))*Math.PI*2;  // 回りすぎないよう最寄りの正面へ
+  camTargetLookX = 0; camTargetLookZ = 0;
+  camTargetDist  = defaultCamDist();
+}
 function setupCamStick(){
   const stick=$('#camStick'), knob=$('#camKnob');
   let active=false, cx=0, cy=0;
@@ -1089,7 +1119,7 @@ function setupCamStick(){
     knob.style.transform=`translate(${dx}px,${dy}px)`;
     camTargetAngle += dx*0.0009;     // 左右で回転
     camTargetLookX=0; camTargetLookZ=0;   // パンでクローズアップ解除
-    camTargetDist = Math.max(9,Math.min(32, camTargetDist + dy*0.02)); // 上下で寄り引き
+    camTargetDist = Math.max(9,Math.min(maxCamDist(), camTargetDist + dy*0.02)); // 上下で寄り引き
   }
   function end(){ active=false; knob.style.transform='translate(0,0)'; }
   stick.addEventListener('touchstart',start,{passive:true});
@@ -1099,7 +1129,8 @@ function setupCamStick(){
   window.addEventListener('mousemove',move);
   window.addEventListener('mouseup',end);
   $('#zoomIn').onclick=()=>{ camTargetDist=Math.max(9,camTargetDist-2); };
-  $('#zoomOut').onclick=()=>{ camTargetDist=Math.min(32,camTargetDist+2); };
+  $('#zoomOut').onclick=()=>{ camTargetDist=Math.min(maxCamDist(),camTargetDist+2); };
+  const rv=$('#viewReset'); if(rv) rv.onclick=resetView;
 }
 
 /* ---------- 会話システム ---------- */
@@ -1187,6 +1218,7 @@ window.DOPA.core = {
   state, SAVE_KEY,
   get THREE(){return THREE;},
   initScene, rebuildIsland, setupIslandInput, setupCamStick, setMode, refreshHUD,
+  islandRadiusFor, resetView,
   getResidentMeshes:()=>residentMeshes,
   focusResident:(res)=>{ camTargetLookX=res.pos.x; camTargetLookZ=res.pos.z; camTargetDist=Math.min(camTargetDist,11); },
   setModeRef:(m)=>{curMode=m;}
@@ -1391,6 +1423,7 @@ function confirmMaker(){
     outfitId:null, owned:[], maxedOnce:false
   };
   S.residents.push(res);
+  const grewIsland = core.islandRadiusFor(S.residents.length) > core.islandRadiusFor(S.residents.length-1);
   if(makerStage) makerStage.show(false);
   const had2=S.clothUnlocked, had3=S.presentUnlocked;
   if(S.residents.length>=2) S.clothUnlocked=true;
@@ -1401,7 +1434,9 @@ function confirmMaker(){
   ensureIsland();
   core.rebuildIsland();
   showScreen('islandScreen');
-  toast(unlockMsg || (res.spec.name+" が島にやってきた！"));
+  let arriveMsg = unlockMsg || (res.spec.name+" が島にやってきた！");
+  if(grewIsland) arriveMsg += "  🏝️島がひろがった！";
+  toast(arriveMsg);
   autosave();
 }
 
