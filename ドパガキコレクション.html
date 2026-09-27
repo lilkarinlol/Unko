@@ -165,6 +165,12 @@
   .modal-card p{font-weight:800;font-size:17px;line-height:1.6;margin:0 0 18px;}
   .modal-card .row{display:flex;gap:12px;}
   .modal-card .row .btn{flex:1;}
+  .code-box{font-family:ui-monospace,Menlo,Consolas,monospace;font-weight:800;font-size:20px;
+    letter-spacing:1px;word-break:break-all;background:#f3f7ff;border:3px solid var(--orange);
+    border-radius:14px;padding:14px;margin:6px 0 14px;color:#1c3d6e;user-select:all;-webkit-user-select:all;}
+  .cloud-in{width:100%;font-size:18px;font-weight:800;padding:12px 14px;border-radius:12px;
+    border:3px solid var(--orange);outline:none;text-align:center;box-sizing:border-box;margin-bottom:12px;}
+  .cloud-note{font-size:13px;color:#777;font-weight:700;line-height:1.6;margin:0 0 14px;}
   .shop-opts{display:flex;flex-direction:column;gap:10px;}
   .shop-opt.locked{opacity:.5;filter:grayscale(.45);}
   #listScreen{background:linear-gradient(180deg,#8fd3ec,#cdeefb);}
@@ -225,6 +231,7 @@
       <button class="btn btn-org btn-lg" id="decideIslandBtn">決定！</button>
     </div>
     <button class="btn btn-grn btn-lg" id="continueBtn">続きから遊ぶ</button>
+    <button class="btn btn-gray btn-lg" id="titleCloudBtn" style="margin-top:12px;">🔑 合言葉で引き継ぐ</button>
   </section>
 
   <!-- 島メイン -->
@@ -238,6 +245,7 @@
       <div class="top-right">
         <button class="btn btn-grn btn-sm" id="listBtn">住人</button>
         <button class="btn btn-org btn-sm" id="saveBtn">セーブ</button>
+        <button class="btn btn-gray btn-sm" id="cloudBtn">☁引継</button>
         <button class="btn btn-red btn-sm" id="quitBtn">終了</button>
       </div>
 
@@ -361,6 +369,9 @@
       <button class="btn btn-grn btn-lg" id="diagB">B</button>
     </div>
     <div style="text-align:center;margin-top:10px;font-weight:800;color:#999;" id="diagProg"></div>
+  </div></div>
+  <div class="modal" id="cloudModal"><div class="modal-card" id="cloudCard">
+    <!-- 中身は openCloud() で動的に生成 -->
   </div></div>
 
 </div>
@@ -1697,30 +1708,84 @@ function closeHouse(){ if(houseStage) houseStage.show(false); showScreen('island
 /* =========================================================
    セーブ／ロード
    - Claude上：window.storage（アーティファクト永続ストレージ）に保存
-   - 外部公開時：localStorage に自動フォールバック
+   - 合言葉コード連携時：クラウド(jsonblob)にも保存し、どの端末でも同期
+   - 上記が使えない時：localStorage に自動フォールバック
    ========================================================= */
 function hasCloud(){ return !!(window.storage && window.storage.get && window.storage.set); }
 
+/* ---- 合言葉クラウド同期（jsonblob・登録不要の無料JSON保存） ---- */
+const CLOUD_API   = "https://jsonblob.com/api/jsonBlob";
+const CLOUD_ID_KEY= "dopagaki_cloud_id";
+let   cloudBusy=false, lastCloudOk=null;
+function getCloudId(){ try{ return localStorage.getItem(CLOUD_ID_KEY)||""; }catch(e){ return ""; } }
+function setCloudId(id){ try{ if(id) localStorage.setItem(CLOUD_ID_KEY,id); else localStorage.removeItem(CLOUD_ID_KEY); }catch(e){} }
+// jsonblob のコードは新しい形式（末尾のUUID）。表示用に整形。
+function shortCode(id){ return id||""; }
+
+async function cloudCreate(jsonStr){
+  const res = await fetch(CLOUD_API, {method:'POST',
+    headers:{'Content-Type':'application/json','Accept':'application/json'}, body:jsonStr});
+  if(!res.ok) throw new Error('create '+res.status);
+  let loc = res.headers.get('Location') || res.headers.get('X-jsonblob') || '';
+  let id = loc ? loc.split('/').pop() : '';
+  if(!id) throw new Error('コード発行に失敗（サーバー応答にIDがありません）');
+  return id;
+}
+async function cloudPut(id, jsonStr){
+  const res = await fetch(CLOUD_API+'/'+encodeURIComponent(id), {method:'PUT',
+    headers:{'Content-Type':'application/json','Accept':'application/json'}, body:jsonStr});
+  if(!res.ok) throw new Error('put '+res.status);
+  return true;
+}
+async function cloudGet(id){
+  const res = await fetch(CLOUD_API+'/'+encodeURIComponent(id), {headers:{'Accept':'application/json'}});
+  if(!res.ok) throw new Error('get '+res.status);
+  return await res.text();
+}
+
 async function writeRaw(data){
+  let ok=false;
   if(hasCloud()){
-    try{ await window.storage.set(SAVE_KEY, data, false); return true; }catch(e){}
+    try{ await window.storage.set(SAVE_KEY, data, false); ok=true; }catch(e){}
   }
-  try{ localStorage.setItem(SAVE_KEY, data); return true; }catch(e){}
-  return false;
+  try{ localStorage.setItem(SAVE_KEY, data); ok=true; }catch(e){}
+  const cid=getCloudId();
+  if(cid){
+    try{ await cloudPut(cid, data); lastCloudOk=true; ok=true; }
+    catch(e){ lastCloudOk=false; /* オフライン等：ローカルには保存済みなので続行 */ }
+  }
+  return ok;
 }
 async function readRaw(){
+  let local=null; try{ local=localStorage.getItem(SAVE_KEY); }catch(e){}
+  const cid=getCloudId();
+  if(cid){
+    try{
+      const cloud=await cloudGet(cid); lastCloudOk=true;
+      if(cloud){
+        if(!local) return cloud;
+        try{ const lc=JSON.parse(local), cc=JSON.parse(cloud);
+          return ((cc.savedAt||0) >= (lc.savedAt||0)) ? cloud : local;   // 新しい方を採用
+        }catch(e){ return cloud; }
+      }
+    }catch(e){ lastCloudOk=false; /* クラウド不通→ローカルへ */ }
+  }
   if(hasCloud()){
     try{ const r=await window.storage.get(SAVE_KEY, false); if(r && r.value!=null) return r.value; }
-    catch(e){ /* 未保存キーは例外になる場合がある→無視 */ }
+    catch(e){}
   }
-  try{ return localStorage.getItem(SAVE_KEY); }catch(e){ return null; }
+  return local;
 }
 
 async function saveGame(showFx){
+  S.savedAt = Date.now();                       // 端末間で新旧を比較するため
   const ok = await writeRaw(JSON.stringify(S));
   if(showFx){
     const b=$('#saveBurst');
-    b.querySelector('.b').textContent = ok ? "💾 保存しました！" : "⚠ 保存できませんでした";
+    const cid=getCloudId();
+    let msg = ok ? "💾 保存しました！" : "⚠ 保存できませんでした";
+    if(ok && cid) msg = (lastCloudOk!==false) ? "☁ クラウドに保存！" : "💾 保存(クラウドは後で再送)";
+    b.querySelector('.b').textContent = msg;
     b.style.display='flex'; setTimeout(()=>b.style.display='none',900);
   }
   return ok;
@@ -1749,6 +1814,105 @@ async function loadGame(){
     S.presentUnlocked = !!obj.presentUnlocked || S.residents.length>=3;
     return true;
   }catch(e){ return false; }
+}
+
+/* =========================================================
+   合言葉コード（クラウド引き継ぎ）モーダル
+   ========================================================= */
+function closeCloud(){ $('#cloudModal').classList.remove('show'); }
+async function copyText(t){
+  try{ await navigator.clipboard.writeText(t); return true; }
+  catch(e){
+    try{ const ta=document.createElement('textarea'); ta.value=t; ta.style.position='fixed'; ta.style.opacity='0';
+      document.body.appendChild(ta); ta.focus(); ta.select();
+      const ok=document.execCommand('copy'); ta.remove(); return ok; }catch(_){ return false; }
+  }
+}
+// 合言葉コードを発行してクラウド同期をONにする
+async function enableCloud(){
+  if(cloudBusy) return; cloudBusy=true;
+  const card=$('#cloudCard');
+  card.innerHTML='<p>コードを発行しています…☁</p>';
+  try{
+    S.savedAt=Date.now();
+    const id=await cloudCreate(JSON.stringify(S));
+    setCloudId(id); lastCloudOk=true;
+    try{ localStorage.setItem(SAVE_KEY, JSON.stringify(S)); }catch(e){}
+    openCloud();   // 表示を「発行済み」に更新
+    toast("☁ クラウド同期をONにしました");
+  }catch(e){
+    card.innerHTML='<p>⚠ コードを発行できませんでした</p>'
+      +'<p class="cloud-note">通信環境をご確認のうえ、もう一度お試しください。'
+      +'（時間をおくと直ることがあります）<br>'+String(e.message||e)+'</p>'
+      +'<div class="row"><button class="btn btn-org" id="cloudRetry">もう一度</button>'
+      +'<button class="btn btn-gray" id="cloudClose2">とじる</button></div>';
+    $('#cloudRetry').onclick=enableCloud; $('#cloudClose2').onclick=closeCloud;
+  }finally{ cloudBusy=false; }
+}
+// コードを入力して復元
+async function restoreCloud(){
+  if(cloudBusy) return;
+  const inp=$('#cloudCodeInput'); if(!inp) return;
+  const code=inp.value.trim();
+  if(!code){ toast("合言葉コードを入れてね"); return; }
+  cloudBusy=true;
+  const card=$('#cloudCard'); card.innerHTML='<p>読み込んでいます…☁</p>';
+  try{
+    const raw=await cloudGet(code);
+    const obj=JSON.parse(raw);
+    if(!obj || typeof obj!=='object' || !('residents' in obj)) throw new Error('セーブ形式ではありません');
+    setCloudId(code); lastCloudOk=true;
+    try{ localStorage.setItem(SAVE_KEY, raw); }catch(e){}
+    if(!await loadGame()) throw new Error('読み込みに失敗');
+    ensureIsland(); core.rebuildIsland(); core.refreshHUD();
+    const og=tickIncome(); if(og>=1){ toast("🏝️ るすばん収入 +"+Math.floor(og)+"G"); }
+    saveGame(false);
+    closeCloud(); showScreen('islandScreen');
+    toast("☁ このスマホに引き継ぎました！");
+  }catch(e){
+    card.innerHTML='<p>⚠ 引き継げませんでした</p>'
+      +'<p class="cloud-note">コードが正しいかご確認ください。<br>'+String(e.message||e)+'</p>'
+      +'<div class="row"><button class="btn btn-org" id="cloudBack">戻る</button>'
+      +'<button class="btn btn-gray" id="cloudClose3">とじる</button></div>';
+    $('#cloudBack').onclick=openCloud; $('#cloudClose3').onclick=closeCloud;
+  }finally{ cloudBusy=false; }
+}
+function unlinkCloud(){
+  setCloudId(""); lastCloudOk=null;
+  toast("この端末の同期を解除しました");
+  openCloud();
+}
+function openCloud(){
+  const card=$('#cloudCard'); const cid=getCloudId();
+  if(cid){
+    card.innerHTML=
+      '<p>☁ クラウド同期 <span style="color:#34c759">ON</span></p>'
+      +'<p class="cloud-note">この「合言葉コード」を別のスマホの<br>'
+      +'「🔑 合言葉で引き継ぐ」に入力すると、<br>同じ島の続きから遊べます。<br>'
+      +'※コードを知っている人は誰でも開けます。大切に保管してね。</p>'
+      +'<div class="code-box" id="cloudCodeShow">'+shortCode(cid)+'</div>'
+      +'<div class="row"><button class="btn btn-org" id="cloudCopy">コードをコピー</button></div>'
+      +'<div class="row" style="margin-top:10px;"><button class="btn btn-gray" id="cloudUnlink">同期を解除</button>'
+      +'<button class="btn btn-grn" id="cloudDone">とじる</button></div>';
+    $('#cloudCopy').onclick=async ()=>{ const ok=await copyText(cid); toast(ok?"コピーしました！":"長押しでコピーしてね"); };
+    $('#cloudCodeShow').onclick=async ()=>{ const ok=await copyText(cid); if(ok) toast("コピーしました！"); };
+    $('#cloudUnlink').onclick=unlinkCloud;
+    $('#cloudDone').onclick=closeCloud;
+  }else{
+    card.innerHTML=
+      '<p>☁ 合言葉で引き継ぐ</p>'
+      +'<p class="cloud-note">コードを発行すると、ブラウザの履歴を消しても、'
+      +'別のスマホでも、同じコードを入れるだけで続きから遊べます。（無料・登録不要）</p>'
+      +'<button class="btn btn-grn btn-lg" id="cloudEnable">コードを発行してONにする</button>'
+      +'<p class="cloud-note" style="margin-top:16px;">すでにコードを持っている場合は入力：</p>'
+      +'<input class="cloud-in" id="cloudCodeInput" placeholder="合言葉コードを貼り付け" autocomplete="off">'
+      +'<div class="row"><button class="btn btn-org" id="cloudRestore">このスマホに引き継ぐ</button>'
+      +'<button class="btn btn-gray" id="cloudCancel">とじる</button></div>';
+    $('#cloudEnable').onclick=enableCloud;
+    $('#cloudRestore').onclick=restoreCloud;
+    $('#cloudCancel').onclick=closeCloud;
+  }
+  $('#cloudModal').classList.add('show');
 }
 
 /* =========================================================
@@ -1790,6 +1954,9 @@ function wire(){
   $('#shopCancel').onclick=hideShopMenu;
   $('#shopMenu').onclick=(e)=>{ if(e.target.id==='shopMenu') hideShopMenu(); };
   $('#saveBtn').onclick=()=>{ saveGame(true); };
+  $('#cloudBtn').onclick=openCloud;
+  $('#titleCloudBtn').onclick=openCloud;
+  $('#cloudModal').onclick=(e)=>{ if(e.target.id==='cloudModal') closeCloud(); };
   $('#quitBtn').onclick=()=>$('#quitModal').classList.add('show');
   $('#quitNo').onclick=()=>$('#quitModal').classList.remove('show');
   $('#quitYes').onclick=async ()=>{ await saveGame(false); $('#quitModal').classList.remove('show'); location.reload(); };
